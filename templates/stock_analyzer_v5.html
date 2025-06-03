@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="zh-Hant-TW"> <!-- 指定語言為繁體中文 -->
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>個股智能分析引擎 V5</title>
+    <style>
+        body { font-family: 'Microsoft JhengHei', '微軟正黑體', 'Segoe UI', sans-serif; margin: 0; padding: 20px; background-color: #f4f7f9; color: #333; }
+        .container { max-width: 900px; margin: 20px auto; background-color: #fff; padding: 25px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        h1 { color: #2c3e50; text-align: center; margin-bottom: 25px; }
+        form { display: flex; gap: 15px; margin-bottom: 30px; align-items: flex-end; }
+        form label { font-weight: 600; margin-bottom: 5px; display: block; }
+        form input[type="text"], form select {
+            padding: 10px; border: 1px solid #ddd; border-radius: 4px; font-size: 16px;
+            flex-grow: 1; box-sizing: border-box;
+        }
+        form select { min-width: 120px; flex-grow: 0.2; } /* 增加一點寬度給中文選項 */
+        form button {
+            padding: 10px 20px; background-color: #3498db; color: white; border: none;
+            border-radius: 4px; font-size: 16px; cursor: pointer; transition: background-color 0.3s;
+        }
+        form button:hover { background-color: #2980b9; }
+        .loading, .error { text-align: center; padding: 20px; font-size: 18px; color: #7f8c8d; }
+        .error { color: #e74c3c; }
+        .analysis-report { margin-top: 20px; }
+        .report-section { margin-bottom: 25px; padding-bottom: 20px; border-bottom: 1px solid #ecf0f1; }
+        .report-section:last-child { border-bottom: none; margin-bottom: 0; }
+        .report-section h2 { font-size: 20px; color: #34495e; margin-top: 0; margin-bottom: 15px; border-left: 4px solid #3498db; padding-left: 10px;}
+        .chart-container { width: 100%; min-height: 450px; border: 1px solid #eee; background-color: #fdfdfd; display:flex; align-items:center; justify-content:center; color: #7f8c8d; }
+        .key-data ul, .news-list ul { list-style: none; padding-left: 0; }
+        .key-data li, .news-list li { margin-bottom: 8px; font-size: 15px; line-height: 1.6; }
+        .key-data li strong { color: #2c3e50; min-width: 180px; display: inline-block; } /* 調整寬度以適應中文標籤 */
+        .ai-analysis-text { white-space: pre-wrap; line-height: 1.7; background-color: #f9fafb; padding: 15px; border-radius: 4px; border: 1px solid #e5e7eb; font-size: 15px;}
+        .news-list a { text-decoration: none; color: #3498db; font-weight: 500; }
+        .news-list a:hover { text-decoration: underline; }
+        .news-list small { display: block; color: #7f8c8d; font-size: 13px; margin-top: 3px; }
+        .price-info { font-size: 16px; color: #555; margin-bottom: 20px; text-align: center; }
+        .price-info .positive { color: #c0392b; } /* 台股習慣紅漲 */
+        .price-info .negative { color: #27ae60; } /* 台股習慣綠跌 */
+        /* 如果是美股，可能需要動態切換顏色或保持國際慣例 */
+        .price-info .positive.us-market { color: #2ecc71; }
+        .price-info .negative.us-market { color: #e74c3c; }
+
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>個股智能分析引擎 V5</h1>
+        <form id="analyze-form" method="POST">
+            <div style="flex-grow: 1;">
+                <label for="ticker">股票代碼:</label>
+                <input type="text" id="ticker" name="ticker" placeholder="例如: AAPL 或 2330" value="{{ request.form.ticker if request.form else '' }}" required>
+            </div>
+            <div style="min-width: 120px;">
+                <label for="market">市場:</label>
+                <select id="market" name="market">
+                    <option value="TW" {% if request.form.market == 'TW' %}selected{% endif %}>台股 (TW)</option>
+                    <option value="US" {% if request.form.market == 'US' or not request.form %}selected{% endif %}>美股 (US)</option>
+                </select>
+            </div>
+            <button type="submit" id="analyze-button">分析</button>
+        </form>
+
+        {% if loading %}
+            <div class="loading" id="loading-message">正在加載分析報告，請稍候...</div>
+        {% endif %}
+
+        {% if error_message %}
+            <div class="error" id="error-message-display">錯誤: {{ error_message }}</div>
+        {% endif %}
+
+        {% if analysis_data %}
+            <div class="analysis-report">
+                <h2 style="text-align: center; font-size: 24px; color: #1a5276; margin-bottom: 10px;">{{ analysis_data.company_name }} ({{ analysis_data.ticker }}) 分析報告</h2>
+                <div class="price-info">
+                    當前價格: {{ analysis_data.currency }} {{ "%.2f"|format(analysis_data.current_price) }}
+                    {% if analysis_data.price_change_value is not none %}
+                        <span class="{{ 'positive' if analysis_data.price_change_value >= 0 else 'negative' }} {{ 'us-market' if analysis_data.market == 'US' }}">
+                            ({{ "%.2f"|format(analysis_data.price_change_value) }}%)
+                        </span>
+                    {% endif %}
+                </div>
+
+                {% if analysis_data.chart_path %}
+                <div class="report-section">
+                    <h2>價格走勢圖</h2>
+                    <div class="chart-container">
+                        <iframe src="{{ url_for('static', filename=analysis_data.chart_path) }}" style="width: 100%; height: 450px; border: none;" title="{{ analysis_data.company_name }} Chart"></iframe>
+                    </div>
+                </div>
+                {% else %}
+                <div class="report-section">
+                    <h2>價格走勢圖</h2>
+                    <div class="chart-container">圖表無法生成或無數據。</div>
+                </div>
+                {% endif %}
+
+
+                <div class="report-section">
+                    <h2>關鍵數據指標</h2>
+                    <div class="key-data">
+                        <ul>
+                            <li><strong>P/E Ratio (本益比):</strong> {{ "%.2f"|format(analysis_data.pe_ratio) if analysis_data.pe_ratio is not none and analysis_data.pe_ratio != "Infinity" else 'N/A' }}</li>
+                            <li><strong>Market Cap (市值):</strong> {{ "{:,.0f}".format(analysis_data.market_cap) if analysis_data.market_cap is not none else 'N/A' }} {{ analysis_data.currency }}</li>
+                            <li><strong>EPS (每股盈餘):</strong> {{ "%.2f"|format(analysis_data.eps) if analysis_data.eps is not none else 'N/A' }} {{ analysis_data.currency }}</li>
+                            <li><strong>ROE (股東權益報酬率):</strong> {{ analysis_data.roe_display | default('N/A') }}</li>
+                            <li><strong>Net Profit Margin (淨利率):</strong> {{ analysis_data.net_profit_margin | default('N/A') }}</li>
+                            <li><strong>Current Ratio (流動比率):</strong> {{ analysis_data.current_ratio | default('N/A') }}</li>
+                            <br>
+                            <li><strong>RSI (12):</strong> {{ "%.2f"|format(analysis_data.rsi) if analysis_data.rsi is not none else 'N/A' }}</li>
+                            <li><strong>MACD:</strong> {{ "%.2f"|format(analysis_data.macd) if analysis_data.macd is not none else 'N/A' }} (Signal: {{ "%.2f"|format(analysis_data.macd_signal) if analysis_data.macd_signal is not none else 'N/A' }})</li>
+                            <li><strong>KDJ (K):</strong> {{ "%.2f"|format(analysis_data.k) if analysis_data.k is not none else 'N/A' }} (D: {{ "%.2f"|format(analysis_data.d) if analysis_data.d is not none else 'N/A' }})</li>
+                        </ul>
+                    </div>
+                </div>
+
+                {% if analysis_data.patterns %}
+                <div class="report-section">
+                    <h2>近期技術形態</h2>
+                    <p>{{ analysis_data.patterns | join(', ') }}</p>
+                </div>
+                {% endif %}
+
+                {% if analysis_data.analysis %}
+                <div class="report-section">
+                    <h2>AI 智能分析 (繁體中文)</h2>
+                    <div class="ai-analysis-text">
+                        {{ analysis_data.analysis | replace('\n', '<br>') | safe }}
+                    </div>
+                </div>
+                {% endif %}
+
+                {% if analysis_data.news and analysis_data.news | length > 0 %}
+                <div class="report-section">
+                    <h2>相關新聞 (前 {{ analysis_data.news | length }} 則)</h2>
+                    <ul class="news-list">
+                        {% for item in analysis_data.news %}
+                        <li>
+                            <a href="{{ item.link }}" target="_blank">{{ item.title }}</a>
+                            <small>{{ item.source }} - {{ item.date }} {% if item.sentiment and item.sentiment != 'N/A' %}(情緒: {{item.sentiment }}){% endif %}</small>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                </div>
+                {% else %}
+                 <div class="report-section">
+                    <h2>相關新聞</h2>
+                    <p>暫無相關新聞。</p>
+                </div>
+                {% endif %}
+            </div>
+        {% endif %}
+    </div>
+    <script>
+        // Disable button on form submit to prevent multiple submissions
+        const analyzeForm = document.getElementById('analyze-form');
+        const analyzeButton = document.getElementById('analyze-button');
+        const loadingMessageEl = document.getElementById('loading-message');
+
+        if (analyzeForm && analyzeButton) {
+            analyzeForm.addEventListener('submit', function() {
+                analyzeButton.disabled = true;
+                analyzeButton.textContent = '分析中...';
+                if (loadingMessageEl) loadingMessageEl.style.display = 'block'; // Show loading message
+            });
+        }
+        // If the page is reloaded (e.g. after form submission and render_template),
+        // re-enable the button if it was a GET request or if there's an error.
+        window.addEventListener('pageshow', function(event) {
+            if (analyzeButton && analyzeButton.disabled) {
+                 // Check if it's not a post-submission scenario where results are shown
+                const reportArea = document.querySelector('.analysis-report');
+                const errorArea = document.getElementById('error-message-display');
+                if (!reportArea || (errorArea && errorArea.style.display !== 'none')) {
+                    analyzeButton.disabled = false;
+                    analyzeButton.textContent = '分析';
+                }
+            }
+             if (loadingMessageEl && (!document.querySelector('.analysis-report') && !document.getElementById('error-message-display'))) {
+                // If there's no report and no error, but loading was shown, hide it.
+                // This handles cases where user navigates away then back.
+                 const reportContent = document.querySelector('.analysis-report');
+                 const errorContent = document.getElementById('error-message-display');
+                 if (!reportContent && (!errorContent || errorContent.style.display === 'none')) {
+                    loadingMessageEl.style.display = 'none';
+                 }
+            }
+        });
+    </script>
+</body>
+</html>

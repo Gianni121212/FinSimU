@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <title>股票推薦與投資組合產生器</title>
+    <!-- 引入 Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            background: linear-gradient(135deg, #e0f7fa, #fce4ec);
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        .card {
+            margin-top: 50px;
+            border-radius: 15px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+        }
+        .card-header {
+            background-color: #6c757d;
+            color: #fff;
+            border-top-left-radius: 15px;
+            border-top-right-radius: 15px;
+        }
+        .btn-custom {
+            background-color: #6c757d;
+            color: #fff;
+            border: none;
+        }
+        .btn-custom:hover {
+            background-color: #5a6268;
+        }
+        .loading {
+            font-size: 1.25rem;
+            color: #6c757d;
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header text-center">
+                    <h2>股票推薦與投資組合產生器</h2>
+                </div>
+                <div class="card-body">
+                    <form id="portfolioForm">
+                        <!-- 移除 RSI 門檻輸入，由後端固定 -->
+                        <div class="mb-3">
+                            <label for="category" class="form-label">請告訴 Gemini 您喜歡的股票類別（例如：科技股、高風險）</label>
+                            <input type="text" class="form-control" id="category" name="category" placeholder="輸入股票類別" required>
+                        </div>
+                        <button type="submit" class="btn btn-custom w-100">產生投資組合</button>
+                    </form>
+                    <div id="result" class="mt-4"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 引入 Bootstrap 5 與 Popper JS -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+document.getElementById("portfolioForm").addEventListener("submit", function(e) {
+    e.preventDefault();
+    const category = document.getElementById("category").value;
+    const resultDiv = document.getElementById("result");
+    resultDiv.innerHTML = '<p class="loading">資料分析中，請稍候…</p>';
+
+    fetch("/api/portfolio", {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ category: category })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.error) {
+            resultDiv.innerHTML = `<div class="alert alert-danger">${data.error}</div>`;
+        } else {
+            let html = `
+                <div class="card mb-3">
+                    <div class="card-header">投資組合建議</div>
+                    <div class="card-body">
+                        <p>${data.portfolio_analysis.replace(/\n/g, "<br>")}</p>
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="card-header">候選股票資料</div>
+                    <ul class="list-group list-group-flush">
+            `;
+            data.candidate_stocks.forEach(stock => {
+                html += `<li class="list-group-item">股票代碼: ${stock.ticker} - 公司名稱: ${stock.company_name} - RSI: ${stock.rsi.toFixed(2)}</li>`;
+            });
+            html += `</ul></div>`;
+            resultDiv.innerHTML = html;
+        }
+    })
+    .catch(error => {
+        resultDiv.innerHTML = `<div class="alert alert-danger">發生錯誤：${error}</div>`;
+    });
+});
+</script>
+</body>
+</html>

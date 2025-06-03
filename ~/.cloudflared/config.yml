@@ -1,0 +1,7 @@
+tunnel: my-tunnel
+credentials-file: /home/user/.cloudflared/my-tunnel.json
+
+ingress:
+  - hostname: finsimu.yourdomain.com
+    service: http://localhost:5001
+  - service: http_status:404
