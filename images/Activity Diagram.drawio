@@ -1,0 +1,80 @@
+<mxfile host="Electron" modified="2025-05-06T08:11:30.782Z" agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) draw.io/22.1.15 Chrome/120.0.6099.109 Electron/28.1.0 Safari/537.36" etag="WhSa-y13488zbSOmjB7r" version="22.1.15" type="device">
+  <diagram name="Page-1" id="e7e014a7-5840-1c2e-5031-d8a46d1fe8dd">
+    <mxGraphModel dx="794" dy="511" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1169" pageHeight="826" background="none" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="2" value="使用者    " style="swimlane;whiteSpace=wrap;fillColor=none;" parent="1" vertex="1">
+          <mxGeometry x="164.5" y="128" width="280" height="570" as="geometry" />
+        </mxCell>
+        <mxCell id="sQp2zXMMT5UYvobN2-Fk-46" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" parent="2" source="5" target="7" edge="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="5" value="" style="ellipse;shape=startState;fillColor=#000000;strokeColor=#000000;" parent="2" vertex="1">
+          <mxGeometry x="115.5" y="40" width="30" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="7" value="登入" style="fillColor=none;" parent="2" vertex="1">
+          <mxGeometry x="75.5" y="110" width="110" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="8" value="取得結果" style="fillColor=none;" parent="2" vertex="1">
+          <mxGeometry x="75.5" y="220" width="110" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="10" value="勾選追蹤" style="fillColor=none;" parent="2" vertex="1">
+          <mxGeometry x="75.5" y="325" width="110" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="11" value="" style="endArrow=open;strokeColor=#23445d;endFill=1;rounded=0;fillColor=#bac8d3;" parent="2" source="8" target="10" edge="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="3" value="系統" style="swimlane;whiteSpace=wrap;fillColor=none;" parent="1" vertex="1">
+          <mxGeometry x="444.5" y="128" width="280" height="570" as="geometry" />
+        </mxCell>
+        <mxCell id="15" value="輸入投資參數" style="fillColor=none;" parent="3" vertex="1">
+          <mxGeometry x="85.5" y="110" width="110" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="16" value="生成投資組合建議" style="fillColor=none;" parent="3" vertex="1">
+          <mxGeometry x="85.5" y="220" width="110" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="sQp2zXMMT5UYvobN2-Fk-43" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" parent="3" source="18" target="30" edge="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="18" value="加入資料庫" style="fillColor=none;" parent="3" vertex="1">
+          <mxGeometry x="85.5" y="325" width="110" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="30" value="完成通知顯示" style="fillColor=none;" parent="3" vertex="1">
+          <mxGeometry x="85.5" y="422" width="110" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="38" value="" style="ellipse;shape=endState;fillColor=#000000;strokeColor=#000000;" parent="3" vertex="1">
+          <mxGeometry x="125" y="522" width="30" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="39" value="" style="endArrow=open;strokeColor=#000000;endFill=1;rounded=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;" parent="3" source="30" target="38" edge="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="4" value="外部AI" style="swimlane;whiteSpace=wrap;fillColor=none;" parent="1" vertex="1">
+          <mxGeometry x="724.5" y="128" width="280" height="570" as="geometry" />
+        </mxCell>
+        <mxCell id="33" value="呼叫GA、Genimi、&#xa;Azure AI、yFinance" style="fillColor=none;" parent="4" vertex="1">
+          <mxGeometry x="85" y="220" width="110" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="20" value="" style="endArrow=open;strokeColor=#23445d;endFill=1;rounded=0;fillColor=#bac8d3;" parent="1" source="10" target="18" edge="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="A-vQe6f7n4B1LS47av6f-41" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" parent="1" source="7" target="15" edge="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="360" y="310" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="A-vQe6f7n4B1LS47av6f-42" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" parent="1" source="15" target="33" edge="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="24" value="" style="endArrow=open;strokeColor=#23445d;endFill=1;rounded=0;exitX=0;exitY=0.5;exitDx=0;exitDy=0;entryX=1;entryY=0.5;entryDx=0;entryDy=0;fillColor=#bac8d3;" parent="1" source="33" target="16" edge="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="594.5" y="373" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="19" value="" style="endArrow=open;strokeColor=#23445d;endFill=1;rounded=0;exitX=0;exitY=0.5;exitDx=0;exitDy=0;entryX=1;entryY=0.5;entryDx=0;entryDy=0;fillColor=#bac8d3;" parent="1" source="16" target="8" edge="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

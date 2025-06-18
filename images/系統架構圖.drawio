@@ -1,0 +1,96 @@
+<mxfile host="Electron" modified="2025-05-06T08:09:44.864Z" agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) draw.io/22.1.15 Chrome/120.0.6099.109 Electron/28.1.0 Safari/537.36" etag="kdN1Q31q5bdaPKvaml6X" version="22.1.15" type="device">
+  <diagram name="第1頁" id="8Lt6qkffrsFyIbEjwCd0">
+    <mxGraphModel dx="780" dy="496" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="827" pageHeight="1169" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="Uy2zr53FAmpykZEzQgvi-19" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="Uy2zr53FAmpykZEzQgvi-1" target="Uy2zr53FAmpykZEzQgvi-7">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="Uy2zr53FAmpykZEzQgvi-20" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0;exitY=0.5;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="Uy2zr53FAmpykZEzQgvi-1" target="Uy2zr53FAmpykZEzQgvi-4">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="Uy2zr53FAmpykZEzQgvi-21" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.25;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="Uy2zr53FAmpykZEzQgvi-1" target="Uy2zr53FAmpykZEzQgvi-5">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="Uy2zr53FAmpykZEzQgvi-1" value="功能選單" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;" vertex="1" parent="1">
+          <mxGeometry x="360" y="220" width="120" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="Uy2zr53FAmpykZEzQgvi-17" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="Uy2zr53FAmpykZEzQgvi-2" target="Uy2zr53FAmpykZEzQgvi-1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="Uy2zr53FAmpykZEzQgvi-2" value="用戶登入" style="shape=parallelogram;perimeter=parallelogramPerimeter;whiteSpace=wrap;html=1;fixedSize=1;fillColor=none;" vertex="1" parent="1">
+          <mxGeometry x="360" y="130" width="120" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="Uy2zr53FAmpykZEzQgvi-16" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="Uy2zr53FAmpykZEzQgvi-3" target="Uy2zr53FAmpykZEzQgvi-2">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="Uy2zr53FAmpykZEzQgvi-3" value="開啟APP" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;" vertex="1" parent="1">
+          <mxGeometry x="360" y="40" width="120" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="Uy2zr53FAmpykZEzQgvi-4" value="個股AI分析" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;flipH=0;" vertex="1" parent="1">
+          <mxGeometry x="60" y="330" width="120" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="Uy2zr53FAmpykZEzQgvi-23" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="Uy2zr53FAmpykZEzQgvi-5" target="Uy2zr53FAmpykZEzQgvi-8">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="Uy2zr53FAmpykZEzQgvi-5" value="智能投資組合建議" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;flipH=0;" vertex="1" parent="1">
+          <mxGeometry x="260" y="330" width="120" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="Uy2zr53FAmpykZEzQgvi-36" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="Uy2zr53FAmpykZEzQgvi-6" target="Uy2zr53FAmpykZEzQgvi-12">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="Uy2zr53FAmpykZEzQgvi-37" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="Uy2zr53FAmpykZEzQgvi-6" target="Uy2zr53FAmpykZEzQgvi-11">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="Uy2zr53FAmpykZEzQgvi-6" value="追蹤清單" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;flipH=0;" vertex="1" parent="1">
+          <mxGeometry x="460" y="330" width="120" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="Uy2zr53FAmpykZEzQgvi-7" value="即時新聞情緒分析" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;flipH=0;" vertex="1" parent="1">
+          <mxGeometry x="660" y="330" width="120" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="Uy2zr53FAmpykZEzQgvi-24" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="Uy2zr53FAmpykZEzQgvi-8" target="Uy2zr53FAmpykZEzQgvi-10">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="Uy2zr53FAmpykZEzQgvi-8" value="多個投資組合清單" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;" vertex="1" parent="1">
+          <mxGeometry x="260" y="440" width="120" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="Uy2zr53FAmpykZEzQgvi-40" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="Uy2zr53FAmpykZEzQgvi-9" target="Uy2zr53FAmpykZEzQgvi-14">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="Uy2zr53FAmpykZEzQgvi-41" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="Uy2zr53FAmpykZEzQgvi-9" target="Uy2zr53FAmpykZEzQgvi-15">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="Uy2zr53FAmpykZEzQgvi-9" value="觀察價值變化" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;align=center;" vertex="1" parent="1">
+          <mxGeometry x="460" y="540" width="120" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="Uy2zr53FAmpykZEzQgvi-10" value="選擇並加入追蹤清單" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;" vertex="1" parent="1">
+          <mxGeometry x="260" y="550" width="120" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="Uy2zr53FAmpykZEzQgvi-39" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;" edge="1" parent="1" source="Uy2zr53FAmpykZEzQgvi-11">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="520" y="540" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="Uy2zr53FAmpykZEzQgvi-11" value="管理&lt;br&gt;投資組合清單" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;" vertex="1" parent="1">
+          <mxGeometry x="534" y="440" width="90" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="Uy2zr53FAmpykZEzQgvi-38" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="Uy2zr53FAmpykZEzQgvi-12" target="Uy2zr53FAmpykZEzQgvi-9">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="Uy2zr53FAmpykZEzQgvi-12" value="加入&lt;br&gt;自訂個股" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;" vertex="1" parent="1">
+          <mxGeometry x="429" y="440" width="90" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="Uy2zr53FAmpykZEzQgvi-14" value="進行&lt;br&gt;AI分析個股" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;" vertex="1" parent="1">
+          <mxGeometry x="429" y="640" width="90" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="Uy2zr53FAmpykZEzQgvi-15" value="對投資組合&lt;br&gt;進行智能分析" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;" vertex="1" parent="1">
+          <mxGeometry x="534" y="640" width="90" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="Uy2zr53FAmpykZEzQgvi-22" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.75;exitY=1;exitDx=0;exitDy=0;entryX=0.567;entryY=-0.006;entryDx=0;entryDy=0;entryPerimeter=0;" edge="1" parent="1" source="Uy2zr53FAmpykZEzQgvi-1" target="Uy2zr53FAmpykZEzQgvi-6">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
