@@ -1,0 +1,154 @@
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>登入/註冊 - AI 策略分析平台</title>
+
+    <!-- START: PWA/行動裝置優化標籤 -->
+    <meta name="theme-color" content="#6d5edc"/> <!-- 瀏覽器頂部顏色，與 manifest.json 一致 -->
+    <meta name="apple-mobile-web-app-capable" content="yes"> <!-- iOS: 啟用 Web App 模式 -->
+    <meta name="apple-mobile-web-app-status-bar-style" content="default"> <!-- iOS: 狀態列樣式 -->
+    <link rel="apple-touch-icon" href="/static/icons/apple-touch-icon.png"> <!-- iOS: 主畫面圖示 -->
+    <link rel="manifest" href="/static/manifest.json"> <!-- Android/Chrome: PWA 設定檔 -->
+    <!-- END: PWA/行動裝置優化標籤 -->
+    
+    <style>
+        body { font-family: 'Microsoft JhengHei', sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); display: flex; justify-content: center; align-items: center; min-height: 100vh; }
+        .form-container { background: white; padding: 40px; border-radius: 15px; box-shadow: 0 10px 30px rgba(0,0,0,0.2); width: 100%; max-width: 400px; text-align: center; }
+        h2 { margin-bottom: 20px; color: #333; }
+        .form-group { margin-bottom: 20px; text-align: left; }
+        label { display: block; margin-bottom: 5px; font-weight: bold; color: #555; }
+        input { width: 100%; padding: 12px; border: 2px solid #ddd; border-radius: 8px; font-size: 16px; box-sizing: border-box; }
+        .btn { background: linear-gradient(45deg, #667eea, #764ba2); color: white; border: none; padding: 15px; border-radius: 8px; font-size: 16px; width: 100%; cursor: pointer; }
+        .toggle-link { margin-top: 20px; color: #667eea; cursor: pointer; display: inline-block; }
+        .message { margin-top: 15px; padding: 10px; border-radius: 5px; display: none; }
+        .message.success { background: #d4edda; color: #155724; }
+        .message.error { background: #f8d7da; color: #721c24; }
+        #register-form { display: none; }
+    </style>
+</head>
+<body>
+    <div class="form-container">
+        <!-- 登入表單 -->
+        <div id="login-form">
+            <h2>登入平台</h2>
+            <div class="form-group">
+                <label for="login-email">Email</label>
+                <input type="email" id="login-email" required placeholder="請輸入您的 Email">
+            </div>
+            <div class="form-group">
+                <label for="login-password">密碼</label>
+                <input type="password" id="login-password" required>
+            </div>
+            <button class="btn" onclick="handleLogin()">登入</button>
+            <p class="toggle-link" onclick="toggleForms()">還沒有帳號？點此註冊</p>
+        </div>
+
+        <!-- 註冊表單 -->
+        <div id="register-form">
+            <h2>建立新帳號</h2>
+            <div class="form-group">
+                <label for="register-username">暱稱</label>
+                <input type="text" id="register-username" required placeholder="您希望被如何稱呼">
+            </div>
+            <div class="form-group">
+                <label for="register-email">Email (將作為登入帳號)</label>
+                <input type="email" id="register-email" required placeholder="請輸入有效的 Email">
+            </div>
+            <div class="form-group">
+                <label for="register-password">密碼</label>
+                <input type="password" id="register-password" required>
+            </div>
+            <div class="form-group">
+                <label for="register-password-confirm">確認密碼</label>
+                <input type="password" id="register-password-confirm" required>
+            </div>
+            <button class="btn" onclick="handleRegister()">註冊</button>
+            <p class="toggle-link" onclick="toggleForms()">已經有帳號了？返回登入</p>
+        </div>
+        <a href="/" style="position: absolute; top: 20px; left: 20px; color: white; background: rgba(0,0,0,0.2); padding: 10px 15px; border-radius: 8px; text-decoration: none;">
+        ← 返回公開儀表板
+    </a>
+        <div id="message-box" class="message"></div>
+    </div>
+
+<script>
+    const loginForm = document.getElementById('login-form');
+    const registerForm = document.getElementById('register-form');
+    const messageBox = document.getElementById('message-box');
+
+    // 頁面載入時，確保登入表單是可見的，註冊表單是隱藏的
+    document.addEventListener('DOMContentLoaded', () => {
+        loginForm.style.display = 'block';
+        registerForm.style.display = 'none';
+    });
+
+    function toggleForms() {
+        // 直接交換兩個表單的 display 狀態
+        const isLoginVisible = loginForm.style.display === 'block';
+        loginForm.style.display = isLoginVisible ? 'none' : 'block';
+        registerForm.style.display = isLoginVisible ? 'block' : 'none';
+        messageBox.style.display = 'none'; // 切換時隱藏舊訊息
+    }
+
+    function showMessage(text, isError = false) {
+        messageBox.textContent = text;
+        messageBox.className = isError ? 'message error' : 'message success';
+        messageBox.style.display = 'block';
+    }
+
+    async function handleLogin() {
+    const email = document.getElementById('login-email').value;
+    const password = document.getElementById('login-password').value;
+    
+    // 關鍵：將 next 參數也一起傳給後端 API
+    const loginUrl = window.location.search ? `/api/login${window.location.search}` : '/api/login';
+
+    const response = await fetch(loginUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password })
+    });
+    const result = await response.json();
+    if (result.success) {
+        // 使用後端返回的 URL，如果沒有則預設到 /trainer
+        window.location.href = result.redirect_url || '/trainer'; 
+    } else {
+        showMessage(result.message, true);
+    }
+}
+
+    async function handleRegister() {
+        const username = document.getElementById('register-username').value;
+        const email = document.getElementById('register-email').value;
+        const password = document.getElementById('register-password').value;
+        const password_confirm = document.getElementById('register-password-confirm').value;
+
+        if (password !== password_confirm) {
+            showMessage('兩次輸入的密碼不一致', true);
+            return;
+        }
+        
+        // 增加一個簡單的 email 格式檢查
+        if (!email.includes('@')) {
+            showMessage('請輸入有效的 Email 格式', true);
+            return;
+        }
+
+        const response = await fetch('/api/register', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username, email, password, password_confirm })
+        });
+        const result = await response.json();
+        showMessage(result.message, !result.success);
+        if(result.success) {
+            document.getElementById('register-form').querySelectorAll('input').forEach(input => input.value = '');
+            setTimeout(() => {
+                showMessage('註冊成功！已為您切換至登入頁面，請登入。');
+                toggleForms();
+            }, 2000);
+        }
+    }
+</script>
+</body>
+</html>
