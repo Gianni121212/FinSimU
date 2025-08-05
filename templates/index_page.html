@@ -1,0 +1,717 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>AI策略平台</title>
+
+    <meta name="theme-color" content="#ffffff"/>
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <link rel="apple-touch-icon" href="/static/icons/apple-touch-icon.png">
+    <link rel="manifest" href="/static/manifest.json">
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
+    
+    <style>
+        :root {
+            --primary-color: #6d5edc;
+            --gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            --bg-color: #f0f2f5;
+            --card-bg: #ffffff;
+            --text-primary: #1f2937;
+            --text-secondary: #6b7280;
+            --border-color: #e5e7eb;
+            --shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+        html { scroll-behavior: smooth; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Noto Sans TC', 'Segoe UI', Roboto, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-primary);
+            padding-bottom: 80px; /* For bottom nav */
+        }
+        
+        .page-header {
+            background: var(--card-bg);
+            padding: 12px 16px;
+            border-bottom: 1px solid var(--border-color);
+            position: sticky; top: 0; z-index: 1000;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .page-header h1 { font-size: 1.2rem; font-weight: 600; color: var(--primary-color); }
+        .header-actions a {
+            font-size: 0.8rem;
+            color: var(--primary-color);
+            text-decoration: none;
+            background-color: #f0f2f5;
+            padding: 6px 12px;
+            border-radius: 16px;
+            font-weight: 500;
+        }
+
+        main { padding: 16px; }
+        .page-view { display: none; animation: fadeIn 0.3s ease-in-out; }
+        .page-view.active { display: block; }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .bottom-nav {
+            position: fixed; bottom: 0; left: 0; right: 0; height: 70px;
+            background-color: rgba(255, 255, 255, 0.9);
+            display: flex; justify-content: space-around;
+            border-top: 1px solid var(--border-color);
+            box-shadow: 0 -2px 10px rgba(0,0,0,0.05); z-index: 1000;
+            backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+        }
+        .nav-button {
+            display: flex; flex-direction: column; align-items: center;
+            gap: 4px; font-size: 0.7rem; color: var(--text-secondary);
+            background: none; border: none; cursor: pointer;
+            padding: 8px; border-radius: 8px; width: 80px;
+        }
+        .nav-button-icon { font-size: 1.4rem; }
+        .nav-button.active { color: var(--primary-color); }
+
+        .card {
+            background: var(--card-bg); padding: 20px;
+            border-radius: 12px; margin-bottom: 20px;
+            box-shadow: var(--shadow);
+        }
+        .card-header { margin-bottom: 20px; }
+        .card-header h2 { font-size: 1.1rem; font-weight: 600; margin-bottom: 8px; }
+        .card-header p { font-size: 0.85rem; color: var(--text-secondary); }
+
+        .form-group { margin-bottom: 16px; }
+        .form-group label { display: block; margin-bottom: 6px; font-weight: 500; font-size: 0.9rem; }
+        .form-group input, .form-group select, .form-group textarea {
+            width: 100%; padding: 14px; border: 1px solid var(--border-color);
+            border-radius: 8px; font-size: 1rem; background-color: #f9fafb;
+        }
+        .form-group input:focus, .form-group select:focus, .form-group textarea:focus {
+            outline: none; border-color: var(--primary-color);
+            box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.2);
+        }
+        .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+
+        .btn {
+            width: 100%; padding: 15px; border: none; border-radius: 8px;
+            font-size: 1rem; font-weight: 600; cursor: pointer;
+            background: var(--gradient); color: white;
+        }
+        .btn:disabled { background: #bdc3c7; cursor: not-allowed; }
+
+        .loading, .progress { 
+            text-align: center; 
+            padding: 40px 0; 
+            display: none;
+        }
+        .spinner {
+            width: 36px; height: 36px; border: 4px solid #e0e0e0;
+            border-top-color: var(--primary-color); border-radius: 50%;
+            animation: spin 1s linear infinite; margin: 0 auto 12px;
+        }
+        @keyframes spin { 100% { transform: rotate(360deg); } }
+        .loading p, .progress p { font-size: 0.9rem; color: var(--text-secondary); }
+
+        .result-card {
+            background: var(--card-bg); border-radius: 12px;
+            margin-bottom: 20px; box-shadow: var(--shadow);
+        }
+        .result-header {
+            padding: 12px 16px; border-bottom: 1px solid var(--border-color);
+            display: flex; justify-content: space-between; align-items: center;
+        }
+        .result-header h3 { font-size: 1.1rem; font-weight: 600; color: var(--primary-color); }
+        .result-body { padding: 16px; }
+        
+        .data-list { list-style: none; }
+        .data-list-item {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 12px 0; font-size: 0.9rem; border-bottom: 1px solid #f3f4f6;
+        }
+        .data-list-item:last-child { border-bottom: none; }
+        .data-list-item .label { color: var(--text-secondary); }
+        .data-list-item .value { font-weight: 600; }
+        .value.positive { color: #16a34a; } .value.negative { color: #dc2626; }
+        
+        .description {
+            background-color: #f9fafb; padding: 12px; border-radius: 8px; margin-top: 16px;
+            white-space: pre-wrap; font-family: 'Courier New', monospace; font-size: 0.8rem;
+            max-height: 150px; overflow-y: auto; border: 1px solid var(--border-color);
+        }
+
+        .chart-preview-container {
+            border: 1px solid var(--border-color); border-radius: 8px; padding: 8px;
+            cursor: pointer; margin-top: 16px;
+        }
+        .chart-preview-image { width: 100%; border-radius: 4px; display: block; }
+        
+        .chart-modal {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background-color: rgba(0, 0, 0, 0.85); z-index: 2000; display: none;
+            flex-direction: column; padding-top: 45px; box-sizing: border-box;
+        }
+        .chart-modal-content { width: 100%; height: 100%; background-color: #fff; overflow: hidden; }
+        .chart-modal-iframe { width: 100%; height: 100%; border: none; }
+        .chart-modal-close {
+            position: absolute; top: 10px; right: 10px; width: 32px; height: 32px;
+            background-color: rgba(0, 0, 0, 0.5); border: none; border-radius: 50%;
+            font-size: 20px; font-weight: bold; color: #fff; cursor: pointer;
+            line-height: 32px; text-align: center; z-index: 2001;
+        }
+
+        .strategy-list { display: flex; flex-direction: column; gap: 16px; }
+        .strategy-list-card {
+            background: var(--card-bg); border-radius: 12px; box-shadow: var(--shadow);
+            border-left: 4px solid var(--primary-color);
+        }
+        .strategy-list-header { padding: 12px 16px; border-bottom: 1px solid var(--border-color); }
+        .strategy-list-header h3 { font-size: 1.2rem; font-weight: 600; }
+        .strategy-list-header p { font-size: 0.8rem; color: var(--text-secondary); }
+        .strategy-list-body { padding: 0 16px; }
+        .strategy-list-footer {
+            padding: 12px 16px; background-color: #f9fafb;
+            display: flex; gap: 8px; justify-content: flex-end;
+        }
+        .strategy-list-footer button {
+            padding: 8px 12px; font-size: 0.8rem; border-radius: 20px;
+            border: 1px solid; cursor: pointer;
+        }
+        .btn-backtest { border-color: #16a34a; color: #16a34a; background: #f0fdf4; }
+        .btn-delete { border-color: #ef4444; color: #ef4444; background: #fef2f2; }
+        
+        .message-box { padding: 15px; border-radius: 8px; margin-bottom: 20px; font-weight: 500; }
+        .error { background: #fff5f5; border-left: 5px solid #e74c3c; color: #c0392b; }
+        .success { background: #f0fff4; border-left: 5px solid #27ae60; color: #218838; }
+        .hint-bar { background: #e7f3ff; border-left: 5px solid #3498db; color: #2980b9; }
+    </style>
+</head>
+<body>
+
+    <div class="container" id="app-container">
+        <header class="page-header">
+            <h1>🧬 AI 策略平台</h1>
+            <div class="header-actions">
+                <a href="/">公開儀表板</a>
+            </div>
+        </header>
+
+        <main>
+            <div id="page-trainer" class="page-view active">
+                <div class="card">
+                    <div class="card-header">
+                        <h2>📈 基本設定</h2>
+                    </div>
+                    <div class="form-group">
+                        <label for="ticker">股票代號</label>
+                        <input type="text" id="ticker" placeholder="例：AAPL, 2330.TW">
+                    </div>
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label for="start_date">開始日期</label>
+                            <input type="date" id="start_date">
+                        </div>
+                        <div class="form-group">
+                            <label for="end_date">結束日期</label>
+                            <input type="date" id="end_date">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="system_type">系統類型</label>
+                        <select id="system_type">
+                            <option value="A">系統A (28基因多策略)</option>
+                            <option value="B">系統B (10基因RSI策略)</option>
+                        </select>
+                    </div>
+                    <div class="form-grid">
+                        <!-- HTML 修改點: 為每個輸入框添加 oninput 事件 -->
+                        <div class="form-group">
+                            <label for="generations">世代數 (1-100)</label>
+                            <input type="number" id="generations" value="15" min="1" max="100" oninput="validateInput(this)">
+                        </div>
+                        <div class="form-group">
+                            <label for="population_size">族群大小 (1-200)</label>
+                            <input type="number" id="population_size" value="60" min="1" max="200" oninput="validateInput(this)">
+                        </div>
+                        <div class="form-group">
+                            <label for="min_trades">最少交易 (1-20)</label>
+                            <input type="number" id="min_trades" value="4" min="1" max="20" oninput="validateInput(this)">
+                        </div>
+                        <div class="form-group">
+                            <label for="num_runs">訓練次數 (1-50)</label>
+                            <input type="number" id="num_runs" value="10" min="1" max="50" oninput="validateInput(this)">
+                        </div>
+                    </div>
+                </div>
+                <div class="card">
+                     <div class="card-header"><h2>⚖️ 訓練權重設定</h2></div>
+                     <div class="form-group"><label>總報酬率: <span id="total_return_value">0.35</span></label><input type="range" id="total_return_weight" min="0" max="1" step="0.01" value="0.35" oninput="updateWeight('total_return', this.value)"></div>
+                    <div class="form-group"><label>平均交易報酬: <span id="avg_trade_return_value">0.30</span></label><input type="range" id="avg_trade_return_weight" min="0" max="1" step="0.01" value="0.30" oninput="updateWeight('avg_trade_return', this.value)"></div>
+                    <div class="form-group"><label>勝率: <span id="win_rate_value">0.25</span></label><input type="range" id="win_rate_weight" min="0" max="1" step="0.01" value="0.25" oninput="updateWeight('win_rate', this.value)"></div>
+                    <div class="form-group"><label>交易次數: <span id="trade_count_value">0.05</span></label><input type="range" id="trade_count_weight" min="0" max="1" step="0.01" value="0.05" oninput="updateWeight('trade_count', this.value)"></div>
+                    <div class="form-group"><label>回撤懲罰: <span id="drawdown_value">0.05</span></label><input type="range" id="drawdown_weight" min="0" max="1" step="0.01" value="0.05" oninput="updateWeight('drawdown', this.value)"></div>
+                    <div id="weight_total">權重總和: 1.00</div>
+                </div>
+                <button class="btn" id="train-btn" onclick="startTraining()">🚀 開始訓練</button>
+                <div class="progress" id="progress"><div class="spinner"></div><p>訓練中，請稍候...</p></div>
+                <div id="results"></div>
+            </div>
+
+            <div id="page-backtester" class="page-view">
+                <div class="card">
+                    <div class="card-header">
+                         <h2>⚙️ 手動策略回測</h2>
+                         <p>輸入一個已知的策略基因，驗證其在特定時間範圍內的績效表現。</p>
+                    </div>
+                    <div class="form-group"><label for="manual-ticker">股票代號</label><input type="text" id="manual-ticker" placeholder="例：2330.TW, AAPL"></div>
+                    <div class="form-group"><label for="manual-gene">策略基因 (JSON 格式)</label><input type="text" id="manual-gene" placeholder="請貼上或從策略清單帶入的基因..."></div>
+                    <div class="form-group">
+                        <label for="manual-duration">回測時長 (月)</label>
+                        <input type="number" id="manual-duration" value="36" min="3" max="120" oninput="validateInput(this)">
+                    </div>
+                    <button class="btn" id="backtest-btn" onclick="startManualBacktest()">🚀 開始回測</button>
+                </div>
+                <div class="loading" id="backtest-loading"><div class="spinner"></div><p>🔄 正在執行回測...</p></div>
+                <div id="manual-backtest-results"></div>
+            </div>
+
+            <div id="page-strategies" class="page-view">
+                <div class="card">
+                    <div class="card-header">
+                        <h2>📖 我的策略清單</h2>
+                        <p>您所有已儲存的策略，方便管理與追蹤。</p>
+                    </div>
+                    <div id="strategy-list-status"></div>
+                    <div id="strategy-list-container"></div>
+                </div>
+            </div>
+        </main>
+
+        <nav class="bottom-nav">
+            <button class="nav-button active" onclick="showPage('page-trainer')"><span class="nav-button-icon">🧬</span><span>訓練器</span></button>
+            <button class="nav-button" onclick="showPage('page-backtester')"><span class="nav-button-icon">⚙️</span><span>回測</span></button>
+            <button class="nav-button" onclick="showPage('page-strategies')"><span class="nav-button-icon">📖</span><span>我的策略</span></button>
+        </nav>
+    </div>
+
+    <div id="chartModal" class="chart-modal">
+        <button id="chartModalClose" class="chart-modal-close">×</button>
+        <div class="chart-modal-content">
+            <iframe id="chartModalIframe" class="chart-modal-iframe" src="about:blank"></iframe>
+        </div>
+    </div>
+
+<script>
+    if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+            navigator.serviceWorker.register('/static/sw.js').catch(err => console.log('SW reg failed: ', err));
+        });
+    }
+
+    let isLoadingStrategies = false;
+
+    document.addEventListener('DOMContentLoaded', async function() {
+        try {
+            const response = await fetch('/api/user/status');
+            const result = await response.json();
+            if (result.logged_in) {
+                document.getElementById('app-container').style.display = 'block';
+                initializeTrainerPage();
+            } else {
+                window.location.href = '/login';
+            }
+        } catch (error) {
+            document.body.innerHTML = '<div style="padding:20px; text-align:center;">無法連接後端，請確認服務已啟動。</div>';
+        }
+        document.getElementById('chartModalClose').addEventListener('click', closeChartModal);
+    });
+
+    function initializeTrainerPage() {
+        const today = new Date();
+        const oneYearAgo = new Date(today);
+        oneYearAgo.setFullYear(today.getFullYear() - 1);
+        document.getElementById('start_date').valueAsDate = oneYearAgo;
+        document.getElementById('end_date').valueAsDate = today;
+        updateTotalWeight();
+    }
+
+    async function handleLogout() {
+        await fetch('/api/logout');
+        window.location.href = '/login';
+    }
+
+    function showPage(pageId) {
+        document.querySelectorAll('.page-view').forEach(p => p.classList.remove('active'));
+        document.getElementById(pageId).classList.add('active');
+        document.querySelectorAll('.nav-button').forEach(b => b.classList.remove('active'));
+        document.querySelector(`.nav-button[onclick="showPage('${pageId}')"]`).classList.add('active');
+        if (pageId === 'page-strategies') loadSavedStrategies();
+    }
+
+    function showMessage(containerId, message, type = 'error') {
+        const container = document.getElementById(containerId);
+        if (!container) return;
+        const msgType = type === 'error' ? 'error' : 'success';
+        container.innerHTML = `<div class="message-box ${msgType}">${message}</div>`;
+    }
+
+    // <<<<<<<<<<<< JAVASCRIPT 修改點 1: 新增 validateInput 函式 >>>>>>>>>>>>
+    function validateInput(element) {
+        // 將 HTML 標籤上的 min/max 屬性值轉為數字
+        const min = parseFloat(element.min);
+        const max = parseFloat(element.max);
+        
+        let value = parseFloat(element.value);
+
+        // 檢查是否為有效的數字
+        if (isNaN(value)) {
+            // 如果使用者清空輸入框，暫時不處理
+            if (element.value === '') return;
+            // 否則，重設為最小值
+            value = min;
+        }
+
+        // 如果數值超過上限，自動修正為上限值
+        if (value > max) {
+            value = max;
+        }
+
+        // 如果數值低於下限，自動修正為下限值
+        if (value < min) {
+            value = min;
+        }
+        
+        // 將修正後的值寫回輸入框
+        element.value = value;
+
+        // (可選) 提供一個短暫的視覺回饋
+        element.style.transition = 'background-color 0.2s';
+        element.style.backgroundColor = '#e7f3ff';
+        setTimeout(() => {
+            element.style.backgroundColor = '#f9fafb';
+        }, 300);
+    }
+    // <<<<<<<<<<<<<<<<<<<< 新增函式結束 >>>>>>>>>>>>>>>>>>>>
+
+    function openChartModal(interactiveUrl) {
+        if (!interactiveUrl) return;
+        const modal = document.getElementById('chartModal');
+        const iframe = document.getElementById('chartModalIframe');
+        iframe.src = interactiveUrl;
+        modal.style.display = 'flex';
+        document.body.style.overflow = 'hidden';
+    }
+
+    function closeChartModal() {
+        const modal = document.getElementById('chartModal');
+        const iframe = document.getElementById('chartModalIframe');
+        modal.style.display = 'none';
+        iframe.src = 'about:blank';
+        document.body.style.overflow = 'auto';
+    }
+
+    function updateWeight(type, value) {
+        document.getElementById(type + '_value').textContent = parseFloat(value).toFixed(2);
+        updateTotalWeight();
+    }
+
+    function updateTotalWeight() {
+        const total = ['total_return_weight', 'avg_trade_return_weight', 'win_rate_weight', 'trade_count_weight', 'drawdown_weight']
+            .reduce((sum, id) => sum + parseFloat(document.getElementById(id).value), 0);
+        const totalElement = document.getElementById('weight_total');
+        totalElement.textContent = `權重總和: ${total.toFixed(2)}`;
+        totalElement.style.color = Math.abs(total - 1.0) < 0.01 ? '#27ae60' : '#e74c3c';
+    }
+    
+    async function startTraining() {
+        const btn = document.getElementById('train-btn');
+        const progress = document.getElementById('progress');
+        const resultsContainer = document.getElementById('results');
+        const ticker = document.getElementById('ticker').value.trim();
+
+        if (!ticker) { showMessage('results', '請輸入股票代號。', 'error'); return; }
+
+        btn.disabled = true;
+        btn.textContent = '🔄 訓練中...';
+        progress.style.display = 'block';
+        resultsContainer.innerHTML = '';
+
+        try {
+            const response = await fetch('/api/train', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    ticker,
+                    start_date: document.getElementById('start_date').value,
+                    end_date: document.getElementById('end_date').value,
+                    system_type: document.getElementById('system_type').value,
+                    custom_weights: {
+                        total_return_weight: parseFloat(document.getElementById('total_return_weight').value),
+                        avg_trade_return_weight: parseFloat(document.getElementById('avg_trade_return_weight').value),
+                        win_rate_weight: parseFloat(document.getElementById('win_rate_weight').value),
+                        trade_count_weight: parseFloat(document.getElementById('trade_count_weight').value),
+                        drawdown_weight: parseFloat(document.getElementById('drawdown_weight').value)
+                    },
+                    basic_params: {
+                        generations: parseInt(document.getElementById('generations').value),
+                        population_size: parseInt(document.getElementById('population_size').value),
+                        min_trades: parseInt(document.getElementById('min_trades').value)
+                    },
+                    num_runs: parseInt(document.getElementById('num_runs').value)
+                })
+            });
+            const result = await response.json();
+            if (result.success) {
+                renderTrainingResults(result);
+            } else {
+                showMessage('results', `訓練失敗: ${result.errors ? result.errors.join(', ') : '未知錯誤'}`, 'error');
+            }
+        } catch (error) {
+            showMessage('results', `網路錯誤: ${error.message}`, 'error');
+        } finally {
+            progress.style.display = 'none';
+            btn.disabled = false;
+            btn.textContent = '🚀 開始訓練';
+        }
+    }
+
+    function renderTrainingResults(result) {
+        const contentDiv = document.getElementById('results');
+        let html = `<div class="message-box success"><strong>訓練成功！</strong> 股票: ${result.ticker} | 期間: ${result.training_period}</div>`;
+        
+        result.results.forEach((strategy) => {
+            const metrics = strategy.metrics;
+            const strategyData = {
+                ticker: result.ticker,
+                train_start_date: result.training_period.split(' ~ ')[0],
+                train_end_date: result.training_period.split(' ~ ')[1],
+                gene: strategy.gene, metrics,
+                strategy_details: strategy.description
+            };
+            const chartHtml = strategy.chart_image_url
+                ? `<div class="chart-preview-container" onclick='openChartModal("${strategy.chart_interactive_url}")'><img src="${strategy.chart_image_url}" class="chart-preview-image"><p style="text-align:center;font-size:0.8rem;color:var(--text-secondary);margin-top:8px;">點擊圖表以進行互動</p></div>`
+                : '<p class="message-box error">圖表生成失敗。</p>';
+            
+            html += `
+            <div class="result-card" data-strategy-json='${JSON.stringify(strategyData)}'>
+                <div class="result-header"><h3>策略排名 #${strategy.rank}</h3></div>
+                <div class="result-body">
+                    <ul class="data-list">
+                        <li class="data-list-item"><span class="label">總報酬率</span><span class="value positive">${(metrics.total_return * 100).toFixed(2)}%</span></li>
+                        <li class="data-list-item"><span class="label">勝率</span><span class="value positive">${(metrics.win_rate_pct || 0).toFixed(1)}%</span></li>
+                        <li class="data-list-item"><span class="label">平均交易報酬</span><span class="value positive">${(metrics.average_trade_return * 100).toFixed(3)}%</span></li>
+                        <li class="data-list-item"><span class="label">最大回撤</span><span class="value negative">${(metrics.max_drawdown * 100).toFixed(2)}%</span></li>
+                        <li class="data-list-item"><span class="label">交易次數</span><span class="value">${metrics.trade_count || 0}</span></li>
+                        <li class="data-list-item">
+                            <span class="label">最大單次漲/跌</span>
+                            <span class="value">
+                                <span class="positive">${(metrics.max_trade_gain_pct || 0).toFixed(2)}%</span> / <span class="negative">${(metrics.max_trade_drop_pct || 0).toFixed(2)}%</span>
+                            </span>
+                        </li>
+                    </ul>
+                    ${chartHtml}
+                    <div class="description">${strategy.description}</div>
+                    <div style="margin-top:16px; display:flex; gap:8px;">
+                        <button style="flex:1;" class="save-btn" onclick='saveStrategy(this)'>⭐ 儲存策略</button>
+                    </div>
+                </div>
+            </div>`;
+        });
+        contentDiv.innerHTML = html;
+    }
+    
+    async function startManualBacktest() {
+        const btn = document.getElementById('backtest-btn');
+        const loading = document.getElementById('backtest-loading');
+        const resultsDiv = document.getElementById('manual-backtest-results');
+        
+        const ticker = document.getElementById('manual-ticker').value.trim();
+        const geneStr = document.getElementById('manual-gene').value.trim();
+        const duration = document.getElementById('manual-duration').value;
+        
+        resultsDiv.innerHTML = '';
+        if (!ticker || !geneStr) { showMessage('manual-backtest-results', '請填寫所有欄位'); return; }
+        
+        let gene;
+        try { 
+            gene = JSON.parse(geneStr); 
+        } catch (e) { 
+            showMessage('manual-backtest-results', '無效的基因格式。基因應為一個 JSON 陣列，例如 [1, 2, 3]。'); 
+            return; 
+        }
+
+        btn.disabled = true;
+        btn.textContent = '🔄 正在回測...';
+        loading.style.display = 'block';
+
+        try {
+            const response = await fetch('/api/manual-backtest', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ticker, gene, duration_months: parseInt(duration) })
+            });
+            const result = await response.json();
+            if (result.success) {
+                renderManualBacktestResult(result);
+            } else {
+                showMessage('manual-backtest-results', result.error || '回測失敗');
+            }
+        } catch (error) {
+            showMessage('manual-backtest-results', '網路錯誤: ' + error.message);
+        } finally {
+            btn.disabled = false;
+            btn.textContent = '🚀 開始回測';
+            loading.style.display = 'none';
+        }
+    }
+
+    function renderManualBacktestResult(result) {
+        const resultsDiv = document.getElementById('manual-backtest-results');
+        const metrics = result.metrics;
+        const hintHtml = result.signal_status ? `<div class="message-box hint-bar">💡 ${result.signal_status}</div>` : '';
+        
+        const chartHtml = result.chart_image_url
+            ? `<div class="chart-preview-container" onclick='openChartModal("${result.chart_interactive_url}")'><img src="${result.chart_image_url}" class="chart-preview-image"><p style="text-align:center;font-size:0.8rem;color:var(--text-secondary);margin-top:8px;">點擊圖表以進行互動</p></div>`
+            : '<p class="message-box error">圖表生成失敗。</p>';
+            
+        const html = `
+            <div class="message-box success"><strong>回測成功！</strong> ${result.ticker} | ${result.backtest_period}</div>
+            ${hintHtml}
+            <div class="result-card">
+                <div class="result-body">
+                    <ul class="data-list">
+                       <li class="data-list-item"><span class="label">總報酬率</span><span class="value positive">${(metrics.total_return * 100).toFixed(2)}%</span></li>
+                       <li class="data-list-item"><span class="label">勝率</span><span class="value positive">${(metrics.win_rate_pct || 0).toFixed(1)}%</span></li>
+                       <li class="data-list-item"><span class="label">平均交易報酬</span><span class="value positive">${(metrics.average_trade_return * 100).toFixed(3)}%</span></li>
+                       <li class="data-list-item"><span class="label">最大回撤</span><span class="value negative">${(metrics.max_drawdown * 100 || 0).toFixed(2)}%</span></li>
+                       <li class="data-list-item"><span class="label">交易次數</span><span class="value">${metrics.trade_count || 0}</span></li>
+                       <li class="data-list-item">
+                           <span class="label">最大單次漲/跌</span>
+                           <span class="value">
+                               <span class="positive">${(metrics.max_trade_gain_pct * 1 || 0).toFixed(2)}%</span> / <span class="negative">${(metrics.max_trade_drop_pct * 1 || 0).toFixed(2)}%</span>
+                           </span>
+                       </li>
+                    </ul>
+                    ${chartHtml}
+                </div>
+            </div>`;
+        resultsDiv.innerHTML = html;
+    }
+
+    async function saveStrategy(button) {
+        const card = button.closest('.result-card');
+        const strategyData = JSON.parse(card.dataset.strategyJson);
+        button.textContent = '儲存中...';
+        button.disabled = true;
+        try {
+            const response = await fetch('/api/strategies', {
+                method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(strategyData)
+            });
+            if(response.ok) {
+                button.textContent = '✅ 已儲存';
+            } else {
+                const result = await response.json();
+                alert(`儲存失敗: ${result.message}`);
+                button.textContent = '⭐ 儲存策略';
+                button.disabled = false;
+            }
+        } catch (err) {
+            alert(`網路錯誤: ${err}`);
+            button.textContent = '⭐ 儲存策略';
+            button.disabled = false;
+        }
+    }
+    
+    async function loadSavedStrategies() {
+        if (isLoadingStrategies) return;
+        isLoadingStrategies = true;
+        const container = document.getElementById('strategy-list-container');
+        const statusDiv = document.getElementById('strategy-list-status');
+        container.innerHTML = '';
+        statusDiv.innerHTML = '<div class="loading" style="display:block;"><div class="spinner"></div><p>正在載入您的策略...</p></div>';
+
+        try {
+            const response = await fetch('/api/strategies');
+            if (!response.ok) { throw new Error(`伺服器錯誤: ${response.statusText}`); }
+            const result = await response.json();
+            if (!result.success) throw new Error(result.message || '無法獲取策略');
+            statusDiv.innerHTML = '';
+            if (!result.strategies || result.strategies.length === 0) {
+                statusDiv.innerHTML = '<p class="message-box hint-bar">您的清單中沒有任何策略。</p>';
+            } else {
+                renderStrategyList(result.strategies);
+            }
+        } catch (error) {
+            statusDiv.innerHTML = `<div class="message-box error"><strong>載入失敗:</strong> ${error.message}</div>`;
+        } finally {
+            isLoadingStrategies = false;
+        }
+    }
+
+    function renderStrategyList(strategies) {
+        const container = document.getElementById('strategy-list-container');
+        const cardsHtml = strategies.map(s => {
+            const totalReturn = parseFloat(s.total_return);
+            const avgTradeReturn = parseFloat(s.avg_trade_return);
+            return `
+            <div class="strategy-list-card" id="strategy-row-${s.id}">
+                <div class="strategy-list-header">
+                    <h3>${s.ticker || 'N/A'}</h3>
+                    <p>訓練期間: ${s.train_start_date || 'N/A'} ~ ${s.train_end_date || 'N/A'}</p>
+                </div>
+                <div class="strategy-list-body">
+                    <ul class="data-list">
+                        <li class="data-list-item"><span class="label">總報酬</span><span class="value ${totalReturn > 0 ? 'positive' : 'negative'}">${(totalReturn * 100).toFixed(2)}%</span></li>
+                        <li class="data-list-item"><span class="label">平均交易報酬</span><span class="value ${avgTradeReturn > 0 ? 'positive' : 'negative'}">${(avgTradeReturn * 100).toFixed(3)}%</span></li>
+                        <li class="data-list-item"><span class="label">勝率</span><span class="value">${parseFloat(s.win_rate).toFixed(1)}%</span></li>
+                        <li class="data-list-item"><span class="label">交易數</span><span class="value">${s.trade_count}</span></li>
+                        <li class="data-list-item"><span class="label">最大回撤</span><span class="value negative">${(parseFloat(s.max_drawdown) * 100).toFixed(2)}%</span></li>
+                        <li class="data-list-item"><span class="label">最大單次漲/跌</span><span class="value">${s.max_trade_extremes || 'N/A'}</span></li>
+                    </ul>
+                </div>
+                <div class="strategy-list-footer">
+                    <button class="btn-backtest" onclick='quickBacktest(${JSON.stringify(s.ticker)}, ${JSON.stringify(s.gene)})'>⚙️ 回測</button>
+                    <button class="btn-delete" onclick='deleteStrategy(${s.id})'>🗑️ 刪除</button>
+                </div>
+            </div>
+            `;
+        }).join('');
+        container.innerHTML = `<div class="strategy-list">${cardsHtml}</div>`;
+    }
+
+    function quickBacktest(ticker, gene) {
+        if (!ticker || !gene) return;
+        showPage('page-backtester');
+        document.getElementById('manual-ticker').value = ticker;
+        document.getElementById('manual-gene').value = JSON.stringify(gene);
+        document.getElementById('manual-backtest-results').innerHTML = '<div class="message-box hint-bar">已為您填入策略資料，請點擊「開始回測」。</div>';
+    }
+
+    async function deleteStrategy(strategyId) {
+        if (!confirm('您確定要刪除這個策略嗎？')) return;
+        try {
+            const response = await fetch(`/api/strategies/${strategyId}`, { method: 'DELETE' });
+            if (response.ok) {
+                const row = document.getElementById(`strategy-row-${strategyId}`);
+                if (row) {
+                    row.style.transition = 'opacity 0.5s ease';
+                    row.style.opacity = '0';
+                    setTimeout(() => row.remove(), 500);
+                }
+            } else {
+                const result = await response.json();
+                alert(`刪除失敗: ${result.message}`);
+            }
+        } catch (error) {
+            alert(`刪除時發生網路錯誤: ${error.message}`);
+        }
+    }
+</script>
+</body>
+</html>
