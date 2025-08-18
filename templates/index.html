@@ -1,17 +1,18 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>AI股票分析</title>
+    <title>分析平台</title>
 
     <!-- START: PWA/行動裝置優化標籤 -->
-    <meta name="theme-color" content="#6d5edc"/> <!-- 瀏覽器頂部顏色，與 manifest.json 一致 -->
-    <meta name="apple-mobile-web-app-capable" content="yes"> <!-- iOS: 啟用 Web App 模式 -->
-    <meta name="apple-mobile-web-app-status-bar-style" content="default"> <!-- iOS: 狀態列樣式 -->
-    <link rel="apple-touch-icon" href="/static/icons/apple-touch-icon.png"> <!-- iOS: 主畫面圖示 -->
-    <link rel="manifest" href="/static/manifest.json"> <!-- Android/Chrome: PWA 設定檔 -->
+    <meta name="theme-color" content="#6d5edc"/>
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <link rel="apple-touch-icon" href="/static/icons/apple-touch-icon.png">
+    <link rel="manifest" href="/static/manifest.json">
     <!-- END: PWA/行動裝置優化標籤 -->
 
-    <!-- 引入 marked.js 函式庫 -->
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 
     <style>
@@ -33,6 +34,28 @@
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
             background-color: var(--bg-color); color: var(--text-primary); padding-bottom: 80px;
+        }
+
+        #floating-action-btn {
+            position: fixed;
+            top: 20px; /* 距離視窗頂部 20px */
+            left: 16px;
+            z-index: 1001;
+            background: var(--gradient);
+            color: white;
+            padding: 8px 12px;
+            border-radius: 20px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            font-size: 0.8rem;
+            font-weight: 500;
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            transition: transform 0.2s ease-out;
+        }
+        #floating-action-btn:active {
+            transform: scale(0.95);
         }
 
         .mobile-header {
@@ -104,6 +127,15 @@
         .search-card {
             background: var(--card-bg); padding: 20px; border-radius: 12px;
             margin-bottom: 20px; box-shadow: var(--shadow);
+        }
+        .search-card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 8px;
+        }
+        .search-card-header-text {
+            flex-grow: 1;
         }
         .search-card h2 { font-size: 1.1rem; font-weight: 600; margin-bottom: 8px; }
         .search-card p { font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 16px; }
@@ -227,7 +259,7 @@
         .analysis-content [data-title*="最新新聞"]::before { content: '📰'; }
         .analysis-content [data-title*="基本面"]::before { content: '📊'; }
         .analysis-content [data-title*="近期趨勢"]::before, .analysis-content [data-title*="近期趋势"]::before { content: '📈'; }
-        .analysis-content [data-title*="AI策略解讀"]::before, .analysis-content [data-title*="AI策略解读"]::before { content: '🤖'; }
+        .analysis-content [data-title*="策略解讀"]::before, .analysis-content [data-title*="策略解读"]::before { content: '🤖'; }
         .analysis-content [data-title*="投資機會"]::before, .analysis-content [data-title*="投资机会"]::before { content: '💡'; }
         .analysis-content [data-title*="風險提醒"]::before, .analysis-content [data-title*="风险提醒"]::before { content: '⚠️'; }
         .analysis-content [data-title*="市場影響"]::before { content: '📉'; }
@@ -283,6 +315,50 @@
         }
         .return-value, .win-rate-value { font-weight: 600; color: var(--text-primary); }
 
+        .help-icon {
+            width: 24px; height: 24px;
+            background-color: var(--bg-color);
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            color: var(--text-secondary);
+            font-weight: bold;
+            cursor: pointer;
+            font-size: 1rem;
+            margin-left: 10px;
+            transition: background-color 0.2s, color 0.2s;
+            flex-shrink: 0;
+        }
+        .help-icon:hover {
+            background-color: var(--primary-color);
+            color: white;
+        }
+        .help-modal { 
+            display: none; position: fixed; z-index: 2000; left: 0; top: 0; 
+            width: 100%; height: 100%; background-color: rgba(0,0,0,0.6); 
+            display: flex; justify-content: center; align-items: center; padding: 16px; 
+            animation: fadeInModal 0.3s ease-out; 
+        }
+        @keyframes fadeInModal { from { opacity: 0; } to { opacity: 1; } }
+        .help-modal-content { 
+            background-color: var(--card-bg); color: var(--text-primary); 
+            border-radius: 12px; padding: 24px; width: 100%; max-width: 500px; 
+            max-height: 80vh; overflow-y: auto; position: relative; 
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1); 
+        }
+        .help-modal-close { 
+            position: absolute; top: 10px; right: 10px; width: 32px; height: 32px; 
+            line-height: 32px; border: none; background: var(--bg-color); 
+            border-radius: 50%; font-size: 1.5rem; color: var(--text-secondary); 
+            cursor: pointer; text-align: center; 
+        }
+        #helpModalTitle { margin-bottom: 16px; color: var(--primary-color); }
+        #helpModalBody .help-section { margin-bottom: 16px; }
+        #helpModalBody h3 { font-size: 1rem; font-weight: 600; margin-bottom: 8px; padding-bottom: 4px; border-bottom: 1px solid var(--border-color); }
+        #helpModalBody p { font-size: 0.9rem; line-height: 1.6; color: var(--text-secondary); }
+        #helpModalBody strong { color: var(--text-primary); font-weight: 600; }
+        
         .footer {
             text-align: center; margin-top: 30px; padding: 20px;
             font-size: 0.8rem; color: var(--text-secondary);
@@ -291,45 +367,62 @@
     </style>
 </head>
 <body>
+    
+    <a id="floating-action-btn" href="/login">
+        <!-- 內容將由 JavaScript 動態填入 -->
+    </a>
 
     <header class="mobile-header">
-        <h1>🚀 AI 股票分析</h1>
-        <div id="login-status-container">
-            <!-- 登入狀態將由 JavaScript 動態填入此處 -->
-        </div>
+        <h1>🚀  股票分析</h1>
+        <div id="login-status-container"></div>
     </header>
 
     <main>
         <div id="page-analysis" class="page-view active">
             <div class="search-card">
-                <h2>📈 AI 深度股票分析</h2>
-                <p>整合基本面、技術面與 Gemini AI 分析。</p>
+                <div class="search-card-header">
+                    <div class="search-card-header-text">
+                        <h2>📈 深度股票分析</h2>
+                        <p>整合基本面、技術面與 Gemini AI 分析。</p>
+                    </div>
+                    <span class="help-icon" onclick="showHelpModal('analysis')">?</span>
+                </div>
                 <div class="input-group">
                     <input type="text" id="stock-ticker" placeholder="輸入股票代號, 如 AAPL, 2330">
                 </div>
                 <button class="btn-primary" onclick="enhancedAnalyzeStock()">🔍 開始分析</button>
             </div>
-            <div id="stock-loading" style="display: none;" class="loading"><div class="loading-spinner"></div><p>🤖 AI 正在深度分析股票...</p></div>
+            <div id="stock-loading" style="display: none;" class="loading"><div class="loading-spinner"></div><p>🤖 正在深度分析股票...</p></div>
             <div id="stock-results"></div>
         </div>
 
         <div id="page-news" class="page-view">
             <div class="search-card">
-                <h2>📰 智能新聞搜尋</h2>
-                <p>使用 Gemini AI 搜尋最新財經新聞並總結。</p>
+                <div class="search-card-header">
+                    <div class="search-card-header-text">
+                        <h2>📰 智能新聞搜尋</h2>
+                        <p>使用 Gemini AI 搜尋最新財經新聞並總結。</p>
+                    </div>
+                    <span class="help-icon" onclick="showHelpModal('news')">?</span>
+                </div>
                 <div class="input-group">
                     <input type="text" id="news-query" placeholder="輸入關鍵字, 如 台積電, Fed 升息">
                 </div>
                 <button class="btn-primary" onclick="searchNews()">🔍 搜尋新聞</button>
             </div>
-            <div id="news-loading" style="display: none;" class="loading"><div class="loading-spinner"></div><p>🔎 AI 正在搜尋最新新聞...</p></div>
+            <div id="news-loading" style="display: none;" class="loading"><div class="loading-spinner"></div><p>🔎 正在搜尋最新新聞...</p></div>
             <div id="news-results"></div>
         </div>
 
         <div id="page-signals" class="page-view">
             <div class="search-card">
-                <h2>🎯 AI 策略最新信號</h2>
-                <p>篩選最新回測中符合買賣條件的策略。</p>
+                <div class="search-card-header">
+                     <div class="search-card-header-text">
+                        <h2>🎯 策略最新信號</h2>
+                        <p>篩選最新回測中符合買賣條件的策略。</p>
+                    </div>
+                    <span class="help-icon" onclick="showHelpModal('signals')">?</span>
+                </div>
                 <div class="input-group">
                     <label for="market-select">市場選擇</label>
                     <select id="market-select" onchange="loadStrategySignals()"><option value="TW">台股 (TW)</option><option value="US">美股 (US)</option></select>
@@ -342,7 +435,7 @@
                     </div>
                 </div>
             </div>
-            <div id="signals-loading" class="loading"><div class="loading-spinner"></div><p>🤖 正在搜尋最新 AI 策略信號...</p></div>
+            <div id="signals-loading" class="loading"><div class="loading-spinner"></div><p>🤖 正在搜尋最新策略信號...</p></div>
             <div id="signals-results"></div>
         </div>
     </main>
@@ -354,8 +447,8 @@
     </nav>
     
     <div class="footer">
-        <p><a href="/trainer">進入 AI 策略訓練平台</a></p>
-        <p>© 2025 AI驅動投資分析平台</p>
+        <p><a href="/trainer">進入策略訓練平台</a></p>
+        <p></p>
     </div>
 
     <div id="chartModal" class="chart-modal">
@@ -365,20 +458,99 @@
         </div>
     </div>
 
+    <div id="helpModal" class="help-modal">
+        <div class="help-modal-content">
+            <button class="help-modal-close" onclick="closeHelpModal()">&times;</button>
+            <h2 id="helpModalTitle"></h2>
+            <div id="helpModalBody"></div>
+        </div>
+    </div>
+
     <script>
+        const helpContent = {
+            analysis: {
+                title: '💡 深度股票分析說明',
+                body: `
+                    <div class="help-section">
+                        <h3>功能介紹</h3>
+                        <p>這是平台的核心分析工具。您只需輸入一支股票代號，系統將為您執行全方位的深度分析。</p>
+                    </div>
+                    <div class="help-section">
+                        <h3>分析報告包含：</h3>
+                        <p><strong>即時股價與基本面：</strong> 快速掌握市值、本益比、ROE 等關鍵數據。</p>
+                        <p><strong>常用技術指標：</strong> 提供 RSI、移動平均線、布林通道等指標，判斷短期趨勢。</p>
+                        <p><strong>策略回測：</strong> 展示系統預先訓練好的兩套交易策略在該股票上的歷史回測績效。</p>
+                        <p><strong>Gemini AI 深度報告：</strong> AI 會即時搜尋最新相關新聞，並結合所有數據，生成一份包含新聞解讀、投資機會與風險提醒的完整報告。</p>
+                    </div>
+                `
+            },
+            news: {
+                title: '💡 智能新聞搜尋說明',
+                body: `
+                    <div class="help-section">
+                        <h3>功能介紹</h3>
+                        <p>這是一個由 AI 驅動的強大新聞彙整工具。傳統的新聞搜尋只會列出連結，而這裡的 AI 會為您閱讀、理解、並總結搜尋結果。</p>
+                    </div>
+                    <div class="help-section">
+                        <h3>您可以：</h3>
+                        <p><strong>搜尋任何財經主題：</strong> 例如「台積電 ADR」、「聯準會利率決策」或「AI 晶片市場趨勢」。</p>
+                        <p><strong>獲得 AI 總結報告：</strong> AI 會為您產出一份結構化的報告，包含「最新新聞摘要」、「市場影響分析」以及「機會與風險」，幫您快速抓住事件重點。</p>
+                    </div>
+                `
+            },
+            signals: {
+                title: '💡 策略最新信號說明',
+                body: `
+                    <div class="help-section">
+                        <h3>功能介紹</h3>
+                        <p>此功能會自動掃描我們資料庫中所有經過訓練和歷史回測的策略，並篩選出在<strong>最近幾個交易日內</strong>出現「買入」或「賣出」信號的股票。</p>
+                    </div>
+                    <div class="help-section">
+                        <h3>如何使用：</h3>
+                        <p>您可以把它當作一個策略的「雷達」。它幫助您從數百個策略中快速發現市場機會，找到那些模型認為處於關鍵交易點位的股票。</p>
+                        <p><strong>提醒：</strong> 這裡顯示的信號基於歷史數據回測，僅供參考，並非投資建議。</p>
+                    </div>
+                `
+            }
+        };
+
+        function showHelpModal(type) {
+            const modal = document.getElementById('helpModal');
+            const titleEl = document.getElementById('helpModalTitle');
+            const bodyEl = document.getElementById('helpModalBody');
+            
+            if (helpContent[type]) {
+                titleEl.textContent = helpContent[type].title;
+                bodyEl.innerHTML = helpContent[type].body;
+                modal.style.display = 'flex';
+            }
+        }
+
+        function closeHelpModal() {
+            const modal = document.getElementById('helpModal');
+            if (modal) modal.style.display = 'none';
+        }
+
         async function checkLoginStatus() {
             const container = document.getElementById('login-status-container');
+            const fab = document.getElementById('floating-action-btn');
             try {
                 const response = await fetch('/api/user/status');
                 const result = await response.json();
                 if (result.logged_in) {
                     container.innerHTML = `<span class="user-welcome">歡迎, ${result.username}</span><a onclick="handleLogout()" class="logout-link">登出</a>`;
+                    fab.href = '/trainer';
+                    fab.innerHTML = `<span>🧬</span> 策略平台`;
                 } else {
                     container.innerHTML = `<a href="/login" class="login-btn">登入/註冊</a>`;
+                    fab.href = '/login';
+                    fab.innerHTML = `<span>🔑</span> 登入/註冊`;
                 }
             } catch (error) {
                 console.error("無法檢查登入狀態:", error);
                 container.innerHTML = `<a href="/login" class="login-btn">登入/註冊</a>`;
+                fab.href = '/login';
+                fab.innerHTML = `<span>🔑</span> 登入/註冊`;
             }
         }
 
@@ -436,12 +608,20 @@
         function closeChartModal() {
             const modal = document.getElementById('chartModal');
             const iframe = document.getElementById('chartModalIframe');
-            modal.style.display = 'none';
-            iframe.src = 'about:blank';
+            if (modal) modal.style.display = 'none';
+            if (iframe) iframe.src = 'about:blank';
             document.body.style.overflow = 'auto';
+        }
+        
+        // 新增統一關閉彈窗函式
+        function closeAllModals() {
+            closeHelpModal();
+            closeChartModal();
         }
 
         function showPage(pageId) {
+            closeAllModals(); // 切換頁面前先關閉所有彈窗
+
             document.querySelectorAll('.page-view').forEach(p => p.classList.remove('active'));
             document.getElementById(pageId).classList.add('active');
             document.querySelectorAll('.nav-button').forEach(b => b.classList.remove('active'));
@@ -561,10 +741,14 @@
                 ${tech_html}`;
             
             if (data.ai_strategies && (data.ai_strategies.system_a.length > 0 || data.ai_strategies.system_b.length > 0)) {
-                html += `<div class="content-card"><div class="card-header">🤖 AI 策略回測</div><div class="card-body">
+                html += `<div class="content-card"><div class="card-header">🤖 策略回測</div><div class="card-body">
                          <p style="font-size:0.85rem;color:var(--text-secondary);margin-bottom:16px;">${data.ai_strategies.backtest_period_description||''}</p>`;
                 
                 const createStrategyHtml = (s, type) => {
+                    const strategyTypeName = type === 'a' 
+                        ? '策略 1 ' 
+                        : '策略 2 ';
+
                     let parsedGene = [];
                     try {
                         if (s.ai_strategy_gene && typeof s.ai_strategy_gene === 'string') {
@@ -592,7 +776,7 @@
 
                     return `
                     <div class="strategy-card system-${type}">
-                        <div class="strategy-title">${type==='a'?'System A':'System B'} - Rank ${s.strategy_rank}</div>
+                        <div class="strategy-title">${strategyTypeName}</div>
                         <ul class="data-list">
                             <li class="data-list-item"><span class="label">總報酬</span><span class="value">${formatPercent(s.period_return_pct)}</span></li>
                             <li class="data-list-item"><span class="label">平均報酬</span><span class="value">${s.formatted_metrics.average_trade_return_formatted}</span></li>
@@ -607,15 +791,20 @@
                         <div id="details-${type}-${s.strategy_rank}" class="strategy-details" style="display:none;">${s.strategy_details||'無詳細策略'}</div>
                     </div>`;
                 }
+                
+                if (data.ai_strategies.system_a && data.ai_strategies.system_a.length > 0) {
+                    html += createStrategyHtml(data.ai_strategies.system_a[0], 'a');
+                }
+                if (data.ai_strategies.system_b && data.ai_strategies.system_b.length > 0) {
+                    html += createStrategyHtml(data.ai_strategies.system_b[0], 'b');
+                }
 
-                data.ai_strategies.system_a.forEach(s => html += createStrategyHtml(s, 'a'));
-                data.ai_strategies.system_b.forEach(s => html += createStrategyHtml(s, 'b'));
                 html += `</div></div>`;
             }
 
             if (data.gemini_analysis) {
                 const processed_html = postProcessAnalysisHtml(marked.parse(data.gemini_analysis));
-                html += `<div class="content-card"><div class="card-header">🧠 Gemini AI 深度報告</div>
+                html += `<div class="content-card"><div class="card-header">🧠 Gemini AI 報告</div>
                          <div class="card-body analysis-content">${processed_html}</div></div>`;
             }
 
@@ -647,25 +836,61 @@
         function displayStrategySignals(data) {
             const container = document.getElementById('signals-results');
             if (!data || data.length === 0) {
-                container.innerHTML = `<div class="error-message">🎯 目前沒有符合條件的策略信號</div>`; return;
+                container.innerHTML = `<div class="error-message">🎯 目前沒有符合條件的策略信號</div>`;
+                return;
             }
             let html = '<div id="signals-grid">';
             data.forEach(signal => {
-                const systemClass = signal.system_type === 'SystemA' ? 'system-a-tag' : 'system-b-tag';
-                const systemName = signal.system_type === 'SystemA' ? 'System A' : 'System B';
+                const metrics = {
+                    win_rate_pct: signal.win_rate,
+                    total_return: signal.return_pct / 100,
+                    trade_count: signal.total_trades,
+                    average_trade_return: signal.average_trade_return_pct / 100,
+                    max_drawdown: signal.max_drawdown_pct / 100,
+                    max_trade_drop_pct: signal.max_trade_drop_pct,
+                    max_trade_gain_pct: signal.max_trade_gain_pct,
+                };
+
+                let parsedGene = [];
+                try {
+                    if (signal.ai_strategy_gene) {
+                        parsedGene = JSON.parse(signal.ai_strategy_gene);
+                    }
+                } catch(e) {
+                    console.error('解析信號策略基因失敗:', signal.ai_strategy_gene, e);
+                }
+
+                const payload = {
+                    ticker: signal.stock_ticker,
+                    train_start_date: signal.game_start_date,
+                    train_end_date: signal.game_end_date,
+                    gene: parsedGene,
+                    strategy_details: signal.strategy_details,
+                    metrics: metrics
+                };
+
                 const returnColor = parseFloat(signal.return_pct) >= 0 ? 'price-up' : 'price-down';
                 let price_html = '';
                 if (signal.buy_price !== null) price_html += `<div class="signal-price signal-buy">買入價格: ${formatNumber(signal.buy_price)}</div>`;
                 if (signal.sell_price !== null) price_html += `<div class="signal-price signal-sell">賣出價格: ${formatNumber(signal.sell_price)}</div>`;
                 const cleanReason = signal.signal_reason.replace(/🟢|🔴|買入:|賣出:/g, '').trim();
-                html += `<div class="signal-card">
-                    <div class="signal-card-header"><div class="ticker">${signal.stock_ticker}</div><div class="system ${systemClass}">${systemName} R${signal.strategy_rank}</div></div>
-                    <div class="signal-card-body"><p>${cleanReason}</p>${price_html}</div>
+
+                html += `
+                <div class="signal-card">
+                    <div class="signal-card-header">
+                        <div class="ticker">${signal.stock_ticker}</div>
+                        <button class="btn-save" style="padding: 6px 14px;" onclick='saveStrategyFromDashboard(this, ${JSON.stringify(payload)})'>⭐ 儲存</button>
+                    </div>
+                    <div class="signal-card-body">
+                        <p>${cleanReason}</p>
+                        ${price_html}
+                    </div>
                     <div class="signal-card-footer">
                         <span>績效: <span class="return-value ${returnColor}">${formatPercent(signal.return_pct)}</span></span>
                         <span>勝率: <span class="win-rate-value">${formatPercent(signal.win_rate)}</span></span>
                         <span>${signal.processed_at_str ? new Date(signal.processed_at_str).toLocaleDateString() : ''}</span>
-                    </div></div>`;
+                    </div>
+                </div>`;
             });
             html += '</div>';
             container.innerHTML = html;
@@ -677,6 +902,15 @@
             document.getElementById('stock-ticker').addEventListener('keypress', e => { if (e.key === 'Enter') enhancedAnalyzeStock(); });
             document.getElementById('news-query').addEventListener('keypress', e => { if (e.key === 'Enter') searchNews(); });
             document.getElementById('chartModalClose').addEventListener('click', closeChartModal);
+
+            const helpModal = document.getElementById('helpModal');
+            if(helpModal) {
+                helpModal.addEventListener('click', function(event) {
+                    if (event.target === this) {
+                        closeHelpModal();
+                    }
+                });
+            }
         });
     </script>
 </body>
