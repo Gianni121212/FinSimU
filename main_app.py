@@ -1,7 +1,4 @@
-# program_merged.py - 整合版 AI 策略分析與市場分析平台
-# 整合了：
-# 1. 來自 program.py 的市場分析儀表板、Gemini AI 新聞分析、個股深度報告和自動化排程任務
-# 2. 來自 stock_ga_web.py 的使用者認證系統、策略訓練器、手動回測和策略清單功能
+
 
 import os
 import logging
@@ -2695,3 +2692,4 @@ if __name__ == '__main__':
     # 在生產環境中應使用 WSGI 伺服器如 Gunicorn
     # debug 設為 False 是很重要的，因為 Flask 的自動重載器會導致排程任務被初始化兩次
     app.run(debug=False, host='0.0.0.0', port=5001)
+
