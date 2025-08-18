@@ -287,7 +287,7 @@ class EnhancedStockAnalyzer:
         """獲取基本股票數據 - 增強版 (整合.TW/.TWO自動重試)"""
         try:
             # <<<<<<< 這裡是新的智慧重試邏輯 >>>>>>>
-            is_tw_stock_code = re.fullmatch(r'\d{4,6}', self.ticker_input)
+            is_tw_stock_code = re.fullmatch(r'\d{4,6}[A-Z]?', self.ticker_input)
             stock = None
             hist_data = pd.DataFrame() # 初始化一個空的 DataFrame
 
@@ -409,13 +409,14 @@ class EnhancedStockAnalyzer:
             return {}
 
     def get_ai_strategies_data(self):
-        """獲取AI策略數據（從資料庫讀取真實回測日期）"""
+        """獲取AI策略數據（從資料庫讀取真實回測日期）- (修改版：只獲取 Rank 1)"""
         try:
             market_type = "TW" if self.market == "TW" else "US"
             common_fields = "ai_strategy_gene, strategy_rank, strategy_details, period_return_pct, max_drawdown_pct, win_rate_pct, total_trades, average_trade_return_pct, max_trade_drop_pct, max_trade_gain_pct, game_start_date, game_end_date"
             
-            system_a_query = f"SELECT {common_fields} FROM ai_vs_user_games WHERE user_id = 2 AND market_type = %s AND stock_ticker = %s ORDER BY strategy_rank ASC LIMIT 3"
-            system_b_query = f"SELECT {common_fields} FROM ai_vs_user_games WHERE user_id = 3 AND market_type = %s AND stock_ticker = %s ORDER BY strategy_rank ASC LIMIT 3"
+            # <<<< 修改點：將 LIMIT 3 改為 LIMIT 1，只抓取每個系統的最佳策略 >>>>
+            system_a_query = f"SELECT {common_fields} FROM ai_vs_user_games WHERE user_id = 2 AND market_type = %s AND stock_ticker = %s ORDER BY strategy_rank ASC LIMIT 1"
+            system_b_query = f"SELECT {common_fields} FROM ai_vs_user_games WHERE user_id = 3 AND market_type = %s AND stock_ticker = %s ORDER BY strategy_rank ASC LIMIT 1"
             
             system_a_strategies = execute_db_query(system_a_query, (market_type, self.ticker), fetch_all=True)
             system_b_strategies = execute_db_query(system_b_query, (market_type, self.ticker), fetch_all=True)
@@ -634,15 +635,14 @@ def generate_enhanced_news_analysis(stock_data, tech_indicators, strategies_data
 - 布林帶上軌: {tech_indicators.get('bb_upper', '未提供')}
 - 布林帶下軌: {tech_indicators.get('bb_lower', '未提供')}
 
-AI量化策略回測結果（{backtest_info}）：
-{system_a_summary}
+量化策略回測結果（{backtest_info}）：
 
-策略A詳情:
+策略1詳情:
+{system_a_summary}
 {system_a_details}
 
+策略2詳情:
 {system_b_summary}
-
-策略B詳情:
 {system_b_details}
 
 請嚴格按以下格式撰寫分析報告，每個部分都使用獨立的 `##` 標題：
@@ -656,18 +656,21 @@ AI量化策略回測結果（{backtest_info}）：
 ##  近期趨勢
 [搜尋網路及基於技術指標分析股價趨勢等，60-100字]
 
-##  AI策略解讀 (每個小段落都要換行，小標題不要加**)
-[簡單分析兩套AI策略的表現差異、風險收益特徵，重點分析平均交易報酬率、最大回撤、單次交易極值等風險指標，並說明回測期間為{backtest_info}，並上網查詢策略A詳情
-及策略B詳情用到的技術指標，並提醒近期是否可能出現買入或賣出信號，200-300字]
+##  策略解讀 (每個小段落都要換行，小標題不要加**)(!!如果該股票沒有提供策略，請直接回覆"此股票目前尚無訓練好策略，系統將自動將其納入下一批次的訓練清單中。"!!)
+[請基於上方提供的 **策略 1** 和 **策略 2** 的數據，撰寫一份專業分析 (100-200字)。請務必遵循以下要點：
+- **禁止使用 'System A' 或 'System B' 等內部術語**，只能直接使用 "策略 1" 和 "策略 2 " 來稱呼它們，不需加入(28基因多策略或10基因RSI策略作解釋)。
+- **比較表現差異**: 分析兩套策略的風險收益特徵。哪一個看起來更穩健？哪個比較好？為什麼？
+- **解讀關鍵指標**: 根據提供的「策略詳情」，解讀它們分別依賴哪些核心技術指標。
+- **預測近期信號**: 結合當前技術指標，提醒近期是否可能出現買入或賣出信號。(不要提到有數據缺失的部分，謹說明有數據支持的部分即可)]
 
 VIX 恐慌指數:{latest_vix if latest_vix is not None else '未能獲取'} (註：指數越高，市場恐慌程度越高)
 市場情緒分數:{latest_sentiment[0] if latest_sentiment and latest_sentiment[0] is not None else '未能獲取'}
 
 ##  投資機會 (每個小段落都要換行，小標題不要加**)
-[基於新聞、基本面、技術面和AI策略分析，列出2-3點主要投資機會。](每個小段落都要換行，小標題不要加**)
+[基於新聞、基本面、技術面和策略分析，列出2-3點主要投資機會。](每個小段落都要換行，小標題不要加**)
 
  風險提醒 (每個小段落都要換行，小標題不要加**)
-[基於新聞、基本面、技術面和AI策略分析，列出2-3點主要投資風險。](每個小段落都要換行，小標題不要加**)
+[基於新聞、基本面、技術面和策略分析，列出2-3點主要投資風險。](每個小段落都要換行，小標題不要加**)
 
 請確保分析專業、客觀，並重點關注最新新聞對投資決策的影響。"""
 
@@ -712,8 +715,8 @@ class SingleStockTrainer:
         self.default_custom_weights = {
             'total_return_weight': 0.35,
             'avg_trade_return_weight': 0.30,
-            'win_rate_weight': 0.25,
-            'trade_count_weight': 0.05,
+            'win_rate_weight': 0.30,
+            'trade_count_weight': 0,
             'drawdown_weight': 0.05
         }
         
@@ -775,7 +778,7 @@ class SingleStockTrainer:
         """載入股票數據 - (整合.TW/.TWO自動重試)"""
         try:
             # <<<<<<< 這裡是新的智慧重試邏輯 >>>>>>>
-            is_tw_stock_code = re.fullmatch(r'\d{4,6}', ticker)
+            is_tw_stock_code = re.fullmatch(r'\d{4,6}[A-Z]?', ticker)
             loaded_data = None
             final_ticker = ticker
             
@@ -1308,11 +1311,6 @@ finbert_model = None
 if not FINBERT_AVAILABLE:
     logger.warning("PyTorch 或 Transformers 未安裝，FinBERT 情緒分析功能將被跳過。")
 
-# (省略新聞分析相關函式以節省篇幅，但實際使用時需要完整包含)
-
-# ==============================================================================
-# >>> 網站路由與 API 端點 (整合版) <<<
-# ==============================================================================
 
 # === 來自 program.py 的原始首頁路由 ===
 @app.route('/')
@@ -1396,23 +1394,99 @@ def user_status():
 @app.route('/api/train', methods=['POST'])
 @login_required
 def api_train():
-    """訓練API端點"""
+    """
+    (新版) 訓練API端點 - 自動化訓練系統A和系統B，並回傳各自的最佳策略
+    """
     if not ENGINES_IMPORTED:
         return jsonify({'success': False, 'errors': ['遺傳算法引擎未正確載入']}), 500
     
     try:
         data = request.json
-        result = trainer.run_training(
-            ticker=data.get('ticker', '').strip().upper(),
-            start_date=data.get('start_date'),
-            end_date=data.get('end_date'),
-            system_type=data.get('system_type', 'A'),
-            custom_weights=data.get('custom_weights', trainer.default_custom_weights),
-            basic_params=data.get('basic_params', {}),
-            num_runs=int(data.get('num_runs', 10))
+        ticker = data.get('ticker', '').strip().upper()
+        start_date = data.get('start_date')
+        end_date = data.get('end_date')
+        custom_weights = data.get('custom_weights', trainer.default_custom_weights)
+        
+        # <<<< 修改點 1: 後端定義固定的訓練參數 >>>>
+        # 從前端獲取用戶唯一能設定的 min_trades
+        basic_params_from_user = data.get('basic_params', {})
+        
+        # 將固定的參數與用戶設定的參數合併
+        fixed_basic_params = {
+            'generations': 15,       # 固定世代數
+            'population_size': 50,   # 固定族群大小
+            'min_trades': int(basic_params_from_user.get('min_trades', 4)) # 保留用戶設定
+        }
+        fixed_num_runs = 15 # 固定訓練次數
+
+        logger.info(f"收到簡化版訓練請求: {ticker} ({start_date} to {end_date})")
+        logger.info(f"將使用固定參數: {fixed_basic_params}，訓練 {fixed_num_runs} 次")
+
+        # <<<< 修改點 2: 依序執行系統 A 和 B 的訓練 >>>>
+        # 訓練系統 A
+        logger.info("--- 開始訓練系統 A ---")
+        result_A = trainer.run_training(
+            ticker=ticker, start_date=start_date, end_date=end_date,
+            system_type='A',
+            custom_weights=custom_weights,
+            basic_params=fixed_basic_params,
+            num_runs=fixed_num_runs
         )
         
-        return jsonify(result)
+        # 訓練系統 B
+        logger.info("--- 開始訓練系統 B ---")
+        result_B = trainer.run_training(
+            ticker=ticker, start_date=start_date, end_date=end_date,
+            system_type='B',
+            custom_weights=custom_weights,
+            basic_params=fixed_basic_params,
+            num_runs=fixed_num_runs
+        )
+
+        # <<<< 修改點 3: 合併兩個系統的最佳結果 >>>>
+        combined_results = []
+        
+        # 提取系統 A 的最佳策略 (Rank 1)
+        if result_A.get('success') and result_A.get('results'):
+            strategy_A = result_A['results'][0]
+            strategy_A['rank'] = 1 # 重新排名為 1
+            # 新增一個欄位來標示策略類型，方便前端未來客製化顯示
+            strategy_A['strategy_type_name'] = '策略 1 ' 
+            combined_results.append(strategy_A)
+            logger.info("系統 A 訓練成功，已提取最佳策略。")
+        else:
+            logger.warning("系統 A 訓練失敗或無結果。")
+
+        # 提取系統 B 的最佳策略 (Rank 1)
+        if result_B.get('success') and result_B.get('results'):
+            strategy_B = result_B['results'][0]
+            strategy_B['rank'] = 2 # 重新排名為 2
+            strategy_B['strategy_type_name'] = '策略 2 '
+            combined_results.append(strategy_B)
+            logger.info("系統 B 訓練成功，已提取最佳策略。")
+        else:
+            logger.warning("系統 B 訓練失敗或無結果。")
+            
+        # <<<< 修改點 4: 處理訓練失敗的情況並回傳合併後的結果 >>>>
+        if not combined_results:
+            # 如果兩個系統都失敗，回傳一個綜合的錯誤訊息
+            error_A = result_A.get('errors', ['未知錯誤'])[0] if not result_A.get('success') else '無有效策略'
+            error_B = result_B.get('errors', ['未知錯誤'])[0] if not result_B.get('success') else '無有效策略'
+            return jsonify({'success': False, 'errors': [f"所有訓練均失敗。系統A: {error_A} | 系統B: {error_B}"]})
+
+        # 使用任一成功結果的元數據來建立最終的回傳物件
+        base_result = result_A if result_A.get('success') else result_B
+        
+        final_response = {
+            'success': True,
+            'ticker': base_result.get('ticker'),
+            'training_period': base_result.get('training_period'),
+            'results': combined_results
+        }
+        
+        logger.info(f"訓練完成，將回傳 {len(combined_results)} 個最佳策略。")
+        return jsonify(final_response)
+
     except Exception as e:
         logger.error(f"API錯誤 /api/train: {e}", exc_info=True)
         return jsonify({'success': False, 'errors': [f'API伺服器錯誤: {str(e)}']}), 500
@@ -1528,7 +1602,236 @@ def delete_strategy(strategy_id):
     except Exception as e:
         logger.error(f"刪除策略時發生錯誤: {e}", exc_info=True)
         return jsonify({'success': False, 'message': f'伺服器錯誤: {e}'}), 500
+# ==============================================================================
+# >>> 新增：資金配置 API 端點 <<<
+# ==============================================================================
 
+def _build_allocation_prompt(risk_profile, strategies_data):
+    """一個輔助函式，用於動態生成給 Gemini 的 Prompt - 加強版"""
+    
+    # 1. 構建策略資產的文字描述
+    assets_description = ""
+    search_queries = []
+    
+    for i, strategy in enumerate(strategies_data, 1):
+        # --- START: 修正後的程式碼區塊 ---
+        # 處理最大漲跌幅，使其更穩健
+        extremes_str = strategy.get('max_trade_extremes', '0% / 0%')
+        parts = extremes_str.split('/')
+
+        if len(parts) == 2:
+            # 這是預期的格式，例如: "-12.3% / +25.4%"
+            max_drop = parts[0].strip()
+            max_gain = parts[1].strip()
+        else:
+            # 處理邊界情況，例如 "N/A" 或其他沒有 '/' 的格式
+            max_drop = parts[0].strip() if parts else 'N/A'
+            max_gain = 'N/A' # 給一個安全的預設值
+        # --- END: 修正後的程式碼區塊 ---
+        
+        # 為每個股票準備搜尋關鍵字
+        ticker = strategy['ticker']
+        search_queries.append(f"{ticker} stock news today")
+        search_queries.append(f"{ticker} earnings financial results")
+        
+        assets_description += f"""
+資產 {i}: {ticker}
+- 總報酬率: {float(strategy['total_return'])*100:+.2f}%
+- 平均交易報酬率: {float(strategy['avg_trade_return'])*100:+.3f}%
+- 勝率: {float(strategy['win_rate']):.1f}%
+- 最大回撤: -{float(strategy['max_drawdown'])*100:.2f}%
+- 最大漲跌幅: {max_gain} / {max_drop}
+"""
+
+    # 2. 構建完整的 Prompt（優化版）
+    prompt = f"""你是專業的投資組合經理，需要為客戶分配投資資金。
+
+**第一步：搜尋最新資訊**
+請使用 Google Search 工具搜尋以下每個股票的最新資訊：
+
+{chr(10).join([f"- {query}" for query in search_queries])}
+
+重點搜尋內容：
+- 最新財報和業績表現
+- 重大新聞事件和公司動態
+- 分析師評級和目標價
+- 行業趨勢和市場情緒
+
+**第二步：投資組合分析**
+
+客戶風險偏好: {risk_profile}
+- 保守型：重視穩定性，優先低回撤、高勝率的策略
+- 均衡型：平衡收益與風險，尋求最佳風險調整後報酬
+- 積極型：追求高報酬，可承受較高波動，但仍需稍微回撤風險及勝率
+
+策略資產績效數據:
+{assets_description}
+
+**步驟 3：輸出結果**
+基於以上所有資訊，**嚴格按照以下JSON格式回應**，不要有任何額外文字或markdown。理由(justification)必須非常簡潔，限於30-50字。
+
+{{
+  "allocations": [
+    {{"ticker": "股票代號", "percentage": 數字}},
+    {{"ticker": "股票代號", "percentage": 數字}}
+  ],
+  "reasoning": {{
+    "overall_summary": "對整體配置策略的簡短總結(50-70字)。",
+    "per_stock_analysis": [
+      {{
+        "ticker": "股票代號",
+        "role_in_portfolio": "用 '核心增長'、'衛星配置' 或 '穩定基石' 來定義其角色。",
+        "justification": "一句話解釋為何如此配置，以及它在組合中的作用。"
+      }}
+    ]
+  }}
+}}
+
+**輸出要求：**
+- 所有百分比總和必須是100。
+- 分析理由必須精煉、專業、直指核心。
+- **最終的輸出內容中，絕對不能包含任何方括號 `[]` 加上數字的引文標記、基因序列。**
+"""
+    
+    return prompt
+
+
+@app.route('/api/capital-allocation', methods=['POST'])
+@login_required
+def api_capital_allocation():
+    """處理資金配置請求的 API 端點 - 經過兩輪除錯的穩健版本"""
+    try:
+        # 1. 接收並驗證前端傳來的數據
+        data = request.get_json()
+        strategy_ids = data.get('strategy_ids')
+        risk_profile = data.get('risk_profile')
+
+        if not isinstance(strategy_ids, list) or not strategy_ids or not risk_profile:
+            return jsonify({'success': False, 'message': '無效的請求參數'}), 400
+        
+        if not gemini_client:
+            return jsonify({'success': False, 'message': 'Gemini AI 服務未配置'}), 503
+
+        # 2. 從資料庫查詢被選中策略的詳細數據
+        placeholders = ', '.join(['%s'] * len(strategy_ids))
+        sql = f"""
+            SELECT id, ticker, total_return, avg_trade_return, win_rate, max_drawdown, max_trade_extremes 
+            FROM saved_strategies 
+            WHERE id IN ({placeholders}) AND user_id = %s
+        """
+        params = tuple(strategy_ids) + (current_user.id,)
+        strategies_from_db = execute_db_query(sql, params, fetch_all=True)
+
+        if not strategies_from_db or len(strategies_from_db) != len(strategy_ids):
+             return jsonify({'success': False, 'message': '找不到部分或全部策略，請刷新後再試'}), 404
+
+        # 3. 構建給 Gemini 的 Prompt (依賴已修正的 _build_allocation_prompt)
+        prompt_text = _build_allocation_prompt(risk_profile, strategies_from_db)
+        logger.info(f"為使用者 {current_user.id} 生成的資金配置 Prompt 已建立。")
+
+        # 4. 調用 Gemini API
+        config = genai_types.GenerateContentConfig(
+            temperature=0.3,
+            max_output_tokens=20000,
+            tools=[genai_types.Tool(google_search=genai_types.GoogleSearch())],
+            safety_settings=safety_settings_gemini
+        )
+        
+        response = gemini_client.models.generate_content(
+            model='models/gemini-2.5-flash',
+            contents=prompt_text,
+            config=config
+        )
+
+        # 5. 強化的回應處理 (核心修正)
+        logger.info(f"Gemini API 回應類型: {type(response)}")
+        response_text = None
+
+        # 檢查是否有因 Prompt 本身的問題而被阻擋
+        if response.prompt_feedback and response.prompt_feedback.block_reason:
+            block_reason_str = str(response.prompt_feedback.block_reason)
+            logger.error(f"❌ 請求被阻擋！原因: {block_reason_str}")
+            return jsonify({
+                'success': False,
+                'message': f'AI 分析請求被安全策略阻擋，原因: {block_reason_str}。請嘗試調整策略描述或風險偏好。'
+            }), 400
+
+        # 嘗試從 response.text 直接獲取 (最簡單的情況)
+        if hasattr(response, 'text') and response.text:
+            response_text = response.text.strip()
+            logger.info("✅ 使用 response.text 成功獲取回應")
+        # 如果不行，深入挖掘 candidates
+        elif hasattr(response, 'candidates') and response.candidates:
+            candidate = response.candidates[0] # 通常只關心第一個候選項
+            
+            # 檢查完成原因，這是判斷是否被安全攔截的關鍵
+            finish_reason_str = str(candidate.finish_reason) if hasattr(candidate, 'finish_reason') else 'UNKNOWN'
+            if finish_reason_str.upper() != 'STOP':
+                 logger.warning(f"⚠️ Gemini 回應的完成原因並非 'STOP', 而是 '{finish_reason_str}'。這通常表示內容因安全或其他原因被攔截。")
+                 if finish_reason_str.upper() == 'SAFETY':
+                     return jsonify({
+                         'success': False, 
+                         'message': 'AI 生成的內容因觸發安全策略而被攔截。請稍後重試或調整請求。'
+                     }), 500
+
+            # 如果完成原因是正常的，再嘗試解析內容
+            if hasattr(candidate, 'content') and candidate.content.parts:
+                response_text = "".join(part.text for part in candidate.content.parts if hasattr(part, 'text')).strip()
+                if response_text:
+                    logger.info("✅ 從 candidate.content.parts 成功組合回應")
+
+        if not response_text:
+            logger.error("❌ 無法從 Gemini API 獲取任何文本內容。可能是因為安全攔截或空回應。")
+            logger.error(f"原始回應物件詳情: {response}") # 記錄下整個物件以供分析
+            return jsonify({
+                'success': False, 
+                'message': 'AI 服務返回了空的回應，可能因內容審核被攔截，請稍後再試。'
+            }), 500
+
+        logger.info(f"獲取到的回應長度: {len(response_text)}")
+        logger.info(f"回應前200字符: {response_text[:200]}...")
+
+        # 6. 智能 JSON 解析
+        try:
+            cleaned_text = response_text.replace('```json', '').replace('```', '').strip()
+            json_start = cleaned_text.find('{')
+            json_end = cleaned_text.rfind('}') + 1
+            
+            if json_start >= 0 and json_end > json_start:
+                json_text = cleaned_text[json_start:json_end]
+                parsed_response = json.loads(json_text)
+                
+                # 驗證必要欄位
+                if 'allocations' not in parsed_response or not isinstance(parsed_response['allocations'], list):
+                    raise ValueError("回應中缺少 'allocations' 陣列")
+                
+                total_percentage = sum(item.get('percentage', 0) for item in parsed_response['allocations'])
+                if not (95 <= total_percentage <= 105):
+                    logger.warning(f"AI 配置總和為 {total_percentage}%，偏離100%較多")
+                
+                if 'reasoning' not in parsed_response:
+                    parsed_response['reasoning'] = "AI已完成分析，但未提供詳細說明"
+                
+                logger.info("✅ JSON 解析成功")
+                return jsonify({'success': True, 'data': parsed_response})
+            else:
+                raise ValueError("在回應中找不到有效的JSON結構")
+
+        except (json.JSONDecodeError, ValueError) as e:
+            logger.error(f"JSON 解析失敗: {e}")
+            logger.error(f"原始回應: {response_text}")
+            return jsonify({
+                'success': False, 
+                'message': f'AI 回應格式異常，原始回應: {response_text[:300]}...',
+                'raw_response': response_text
+            }), 500
+
+    except Exception as e:
+        logger.error(f"資金配置 API 發生嚴重錯誤: {e}", exc_info=True)
+        return jsonify({'success': False, 'message': f'伺服器內部錯誤: {str(e)}'}), 500
+
+
+    
 # === 來自 program.py 的原始 API 端點 ===
 # 這是 main_app.py 中的一個函式，請完整替換
 @app.route('/api/enhanced-analyze', methods=['POST'])
@@ -1678,21 +1981,42 @@ def api_news_search():
 
 @app.route('/api/strategy-signals', methods=['GET'])
 def api_strategy_signals():
-    """AI策略信號 API - 從 backtest_signals 表讀取數據"""
+    """
+    (修正版) AI策略信號 API - 修正了 Collation 錯誤並 JOIN ai_vs_user_games 表以包含完整策略基因供儲存
+    """
     try:
         market = request.args.get('market', 'TW')
         signal_type_filter = request.args.get('type', 'buy')
         
         signal_conditions = "('BUY', 'BUY_SELL')" if signal_type_filter == 'buy' else "('SELL', 'BUY_SELL')"
         
+        # <<<< 修正點：在 JOIN ON 條件中加入 COLLATE utf8mb4_unicode_ci 來統一比較規則 >>>>
         query = f"""
         WITH RankedSignals AS (
-            SELECT *, ROW_NUMBER() OVER(PARTITION BY stock_ticker, system_type ORDER BY win_rate DESC, return_pct DESC) as rn
-            FROM backtest_signals WHERE market_type = %s AND signal_type IN {signal_conditions}
+            SELECT 
+                bs.stock_ticker, bs.system_type, bs.strategy_rank, bs.signal_type, 
+                bs.signal_reason, bs.buy_price, bs.sell_price, bs.return_pct, 
+                bs.win_rate, bs.chart_path, bs.processed_at,
+                a.ai_strategy_gene,
+                a.strategy_details,
+                a.game_start_date,
+                a.game_end_date,
+                a.total_trades,
+                a.average_trade_return_pct,
+                a.max_drawdown_pct,
+                a.max_trade_drop_pct,
+                a.max_trade_gain_pct,
+                ROW_NUMBER() OVER(PARTITION BY bs.stock_ticker, bs.system_type ORDER BY bs.win_rate DESC, bs.return_pct DESC) as rn
+            FROM 
+                backtest_signals bs
+            JOIN 
+                ai_vs_user_games a ON bs.stock_ticker = a.stock_ticker COLLATE utf8mb4_unicode_ci
+                                   AND bs.strategy_rank = a.strategy_rank
+                                   AND bs.system_type = (CASE WHEN a.user_id = 2 THEN 'SystemA' ELSE 'SystemB' END) COLLATE utf8mb4_unicode_ci
+            WHERE 
+                bs.market_type = %s AND bs.signal_type IN {signal_conditions}
         )
-        SELECT stock_ticker, system_type, strategy_rank, signal_type, signal_reason, buy_price, sell_price, 
-               return_pct, win_rate, chart_path, processed_at
-        FROM RankedSignals WHERE rn = 1 ORDER BY stock_ticker ASC, system_type ASC;
+        SELECT * FROM RankedSignals WHERE rn = 1 ORDER BY stock_ticker ASC, system_type ASC;
         """
         
         signals = execute_db_query(query, (market,), fetch_all=True)
@@ -1701,15 +2025,20 @@ def api_strategy_signals():
             for signal in signals:
                 if isinstance(signal.get('processed_at'), datetime):
                     signal['processed_at_str'] = signal['processed_at'].strftime('%Y-%m-%d %H:%M')
+                if isinstance(signal.get('game_start_date'), date):
+                    signal['game_start_date'] = signal['game_start_date'].isoformat()
+                if isinstance(signal.get('game_end_date'), date):
+                    signal['game_end_date'] = signal['game_end_date'].isoformat()
+                
                 if signal.get('win_rate') is not None: 
                     signal['win_rate'] = round(signal['win_rate'], 2)
                 if signal.get('return_pct') is not None: 
                     signal['return_pct'] = round(signal['return_pct'], 2)
-        
+
         return jsonify({"success": True, "data": signals or []})
         
     except Exception as e:
-        logger.error(f"AI策略信號API錯誤: {e}")
+        logger.error(f"AI策略信號API錯誤: {e}", exc_info=True)
         return jsonify({"success": False, "message": "內部伺服器錯誤，策略信號查詢失敗"})
 
 @app.route('/charts/<filename>')
@@ -1891,7 +2220,7 @@ News Summary (Traditional Chinese): [Your translated summary for the simulated w
         logger.info(f"\n  [新聞分析] 發送 {len(analyzed_titles)} 條新聞到 Gemini (模擬週: {simulated_week_key}, 真實新聞源: {real_news_date_range})...")
         
         response = gemini_client.models.generate_content(
-            model="models/gemini-1.5-flash-latest",
+            model="models/gemini-2.5-flash",
             contents=prompt,
             config=genai_types.GenerateContentConfig(temperature=0.3, max_output_tokens=1000)
         )
