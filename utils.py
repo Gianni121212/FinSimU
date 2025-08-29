@@ -1,7 +1,3 @@
-# utils.py
-# ==============================================================================
-# ---                       FinSimU 專案 - 共用工具模組 v2.0                   ---
-# ==============================================================================
 import os
 import pymysql
 import yfinance as yf
@@ -135,80 +131,50 @@ def get_stock_info(ticker_symbol):
     return get_stock_data_from_yf(ticker_symbol)
 
 # ==============================================================================
-# ---                  3. 統一績效與交易分析函式 (核心重構)                 ---
+# ---                  3. 統一績效與交易分析函式 (核心重構 v2.2)               ---
 # ==============================================================================
 
-def calc_trade_extremes(prices, dates, buy_signals, sell_signals):
+# === MODIFICATION START: The `calc_trade_extremes` function is now commission-aware ===
+def calc_trade_extremes(buy_signals, sell_signals, commission_rate=0.005):
     """
-    計算單次交易內部的最大跌幅和最大漲幅（以股價為基準）
-    
-    Args:
-        prices (list or np.ndarray): 價格序列
-        dates (list): 日期序列 (datetime objects)
-        buy_signals (list of tuples/dicts): 買入信號 [(date, price), ...] 或 [{'date': dt, 'price': p}, ...]
-        sell_signals (list of tuples/dicts): 賣出信號
-        
-    Returns:
-        tuple: (最大跌幅百分比, 最大漲幅百分比)
+    (v2.2) 計算所有已完成交易中的最大單筆「已實現」獲利和虧損百分比（已納入手續費）。
     """
-    if not buy_signals or not sell_signals or not isinstance(dates, (list, pd.core.indexes.datetimes.DatetimeIndex)) or len(dates) == 0:
+    if not buy_signals or not sell_signals:
         return 0.0, 0.0
 
-    date_to_idx = {pd.to_datetime(d).date(): i for i, d in enumerate(dates)}
-    worst_drop = 0.0
-    best_gain = 0.0
+    max_profit_pct = 0.0
+    max_loss_pct = 0.0
     
-    completed_trades = min(len(buy_signals), len(sell_signals))
-    
-    for i in range(completed_trades):
+    num_trades = min(len(buy_signals), len(sell_signals))
+
+    for i in range(num_trades):
         try:
-            buy_info = buy_signals[i]
-            sell_info = sell_signals[i]
-
-            buy_date = pd.to_datetime(buy_info[0] if isinstance(buy_info, tuple) else buy_info['date']).date()
-            buy_price = buy_info[1] if isinstance(buy_info, tuple) else buy_info['price']
-            sell_date = pd.to_datetime(sell_info[0] if isinstance(sell_info, tuple) else sell_info['date']).date()
+            buy_price = buy_signals[i]['price']
+            sell_price = sell_signals[i]['price']
             
-            if buy_date not in date_to_idx or sell_date not in date_to_idx or buy_price <= 0:
-                continue
+            if buy_price > 1e-9 and np.isfinite(buy_price) and np.isfinite(sell_price):
+                # 模擬買入成本（包含手續費）
+                cost_basis = buy_price * (1 + commission_rate)
+                # 模擬賣出淨收入（扣除手續費）
+                net_proceeds = sell_price * (1 - commission_rate)
                 
-            buy_idx = date_to_idx[buy_date]
-            sell_idx = date_to_idx[sell_date]
-
-            if buy_idx >= sell_idx: continue
-            
-            trade_period_prices = prices[buy_idx : sell_idx + 1]
-            if len(trade_period_prices) == 0: continue
-            
-            min_price_in_trade = min(trade_period_prices)
-            max_price_in_trade = max(trade_period_prices)
-            
-            drop_pct = (min_price_in_trade - buy_price) / buy_price
-            gain_pct = (max_price_in_trade - buy_price) / buy_price
-            
-            worst_drop = min(worst_drop, drop_pct)
-            best_gain = max(best_gain, gain_pct)
-            
-        except (IndexError, TypeError, KeyError, ZeroDivisionError) as e:
-            logger.warning(f"計算交易極值時跳過一筆交易，原因: {e}")
+                # 計算淨盈虧百分比
+                profit_loss_pct = (net_proceeds - cost_basis) / cost_basis
+                
+                if profit_loss_pct > max_profit_pct:
+                    max_profit_pct = profit_loss_pct
+                elif profit_loss_pct < max_loss_pct:
+                    max_loss_pct = profit_loss_pct
+        except (IndexError, TypeError, KeyError):
             continue
     
-    return worst_drop * 100, best_gain * 100
+    return max_profit_pct * 100, max_loss_pct * 100
+# === MODIFICATION END ===
 
-def calculate_performance_metrics(portfolio_values, dates, buy_signals, sell_signals, prices, risk_free_rate=0.0):
+# === MODIFICATION START: The main metrics function is now fully commission-aware ===
+def calculate_performance_metrics(portfolio_values, dates, buy_signals, sell_signals, prices, risk_free_rate=0.04, commission_rate=0.005):
     """
-    計算完整的策略績效指標。
-    
-    Args:
-        portfolio_values (list or np.ndarray): 投資組合價值序列
-        dates (list): 日期序列
-        buy_signals (list): 買入信號
-        sell_signals (list): 賣出信號
-        prices (list): 股價序列
-        risk_free_rate (float): 無風險利率
-        
-    Returns:
-        dict: 包含所有績效指標的字典
+    (v2.2) 計算完整的策略績效指標（所有指標均納入手續費）。
     """
     metrics = {
         'total_return': 0.0, 'max_drawdown': 1.0, 'sharpe_ratio': 0.0,
@@ -220,59 +186,65 @@ def calculate_performance_metrics(portfolio_values, dates, buy_signals, sell_sig
     if portfolio_values is None or len(portfolio_values) < 2:
         return metrics
 
-    # 1. 總報酬率 & 標準差
+    # 1. 總報酬率 & 標準差 (這些本來就是準確的，因為基於已扣手續費的 portfolio_values)
     final_value = portfolio_values[-1]
     metrics['total_return'] = final_value - 1.0
     metrics['std_dev'] = np.std(portfolio_values) if len(portfolio_values) > 1 else 0.001
 
-    # 2. 最大回撤
+    # 2. 最大回撤 (準確)
     pv_np = np.array(portfolio_values)
     running_max = np.maximum.accumulate(pv_np)
     safe_running_max = np.where(running_max == 0, 1, running_max)
     drawdowns = (running_max - pv_np) / safe_running_max
     metrics['max_drawdown'] = np.max(drawdowns) if len(drawdowns) > 0 else 1.0
 
-    # 3. 夏普比率
+    # 3. 夏普比率 (準確)
     if metrics['std_dev'] > 0:
         daily_returns = pd.Series(portfolio_values).pct_change().dropna()
-        excess_returns = daily_returns - (risk_free_rate / 252)
-        metrics['sharpe_ratio'] = (np.mean(excess_returns) / np.std(excess_returns)) * np.sqrt(252) if np.std(excess_returns) > 0 else 0.0
-    else:
-        metrics['sharpe_ratio'] = 0.0
-
-    # 4. 交易相關指標
+        if not daily_returns.empty:
+            excess_returns = daily_returns - (risk_free_rate / 252)
+            if np.std(excess_returns) > 0:
+                metrics['sharpe_ratio'] = (np.mean(excess_returns) / np.std(excess_returns)) * np.sqrt(252)
+    
+    # 4. 交易相關指標 (需要在這裡納入手續費計算)
     completed_trades = min(len(buy_signals), len(sell_signals))
     metrics['trade_count'] = completed_trades
     
     if completed_trades > 0:
         wins, total_profit, total_loss = 0, 0.0, 0.0
-        total_trade_return_pct = 0.0
+        total_net_trade_return_pct = 0.0
         
         for i in range(completed_trades):
             try:
-                buy_info = buy_signals[i]
-                sell_info = sell_signals[i]
-                buy_price = buy_info[1] if isinstance(buy_info, tuple) else buy_info['price']
-                sell_price = sell_info[1] if isinstance(sell_info, tuple) else sell_info['price']
+                buy_price = buy_signals[i]['price']
+                sell_price = sell_signals[i]['price']
 
                 if buy_price > 0 and np.isfinite(buy_price) and np.isfinite(sell_price):
-                    profit = sell_price - buy_price
-                    if profit > 0:
+                    # 模擬手續費影響
+                    cost_basis = buy_price * (1 + commission_rate)
+                    net_proceeds = sell_price * (1 - commission_rate)
+                    
+                    net_profit = net_proceeds - cost_basis
+                    
+                    if net_profit > 0:
                         wins += 1
-                        total_profit += profit
+                        total_profit += net_profit
                     else:
-                        total_loss += abs(profit)
-                    total_trade_return_pct += (profit / buy_price)
+                        total_loss += abs(net_profit)
+                    
+                    total_net_trade_return_pct += (net_profit / cost_basis)
+
             except (IndexError, TypeError, KeyError, ZeroDivisionError):
                 continue
 
-        metrics['win_rate_pct'] = (wins / completed_trades) * 100
-        metrics['profit_factor'] = total_profit / total_loss if total_loss > 0 else (total_profit if total_profit > 0 else 1.0)
-        metrics['average_trade_return'] = total_trade_return_pct / completed_trades if completed_trades > 0 else 0.0
+        metrics['win_rate_pct'] = (wins / completed_trades) * 100 if completed_trades > 0 else 0.0
+        metrics['profit_factor'] = total_profit / total_loss if total_loss > 0 else (total_profit if total_profit > 0 else 0.01)
+        metrics['average_trade_return'] = total_net_trade_return_pct / completed_trades if completed_trades > 0 else 0.0
     
-    # 5. 單次交易最大漲跌幅
-    max_drop, max_gain = calc_trade_extremes(prices, dates, buy_signals, sell_signals)
+    # 5. 單次交易最大已實現漲跌幅 (調用新的、已納入手續費的函式)
+    max_gain, max_drop = calc_trade_extremes(buy_signals, sell_signals, commission_rate)
     metrics['max_trade_drop_pct'] = max_drop
     metrics['max_trade_gain_pct'] = max_gain
     
     return metrics
+# === MODIFICATION END ===
