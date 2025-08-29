@@ -1,14 +1,18 @@
-# offline_ga_trainer.py 
+# offline_ga_trainer.py (v5.2 - 整合台股智慧重試)
 """
-
+AI 遺傳演算法離線訓練器 v5.2
+==================================
 功能：
 - 支援 NSGA-II 多目標優化 + 傳統 GA
 - 完全可配置的參數系統
 - 平均交易報酬率優化
 - 智能暫停機制避免頻率限制
 - 自動保存最佳策略到資料庫
-- 單次交易最大跌幅/漲幅分析
-- 智慧處理台股 .TW/.TWO 後綴
+- 🆕 單次交易最大跌幅/漲幅分析
+- 🆕 智慧處理台股 .TW/.TWO 後綴
+
+作者: AI遺傳演算法團隊
+更新: 2025/07/06
 """
 
 import csv
@@ -61,8 +65,8 @@ class TrainingConfig:
     TOP_N_STRATEGIES_TO_SAVE = 3  # 保存最佳N個策略
     
     # 📅 訓練時間範圍
-    TRAIN_START_DATE = "2022-07-01"  # 訓練開始日期
-    TRAIN_END_DATE = "2025-07-01"    # 訓練結束日期
+    TRAIN_START_DATE = "2022-08-01"  # 訓練開始日期
+    TRAIN_END_DATE = "2025-08-01"    # 訓練結束日期
     
     # 🏠 資料庫設定
     SYSTEM_AI_USER_ID = 2  # 系統AI用戶ID
@@ -75,7 +79,7 @@ class TrainingConfig:
     # 📈 NSGA-II 專用配置
     NSGA2_CONFIG = {
         'nsga2_selection_method': 'custom_balance',  # 🔧 可選方法：
-        'min_required_trades': 5,      # 最少交易次數要求
+        'min_required_trades': 4,      # 最少交易次數要求
         'generations': 5,             # NSGA-II 迭代次數
         'population_size': 70,         # NSGA-II 種群大小
         'show_process': False,         # 是否顯示詳細過程
@@ -84,9 +88,9 @@ class TrainingConfig:
         'custom_weights': {
             'total_return_weight': 0.35,      # 總報酬率權重
             'avg_trade_return_weight': 0.30,  # 平均交易報酬率權重 
-            'win_rate_weight': 0.25,          # 勝率權重
-            'trade_count_weight': 0.05,       # 交易次數權重
-            'drawdown_weight': 0.05           # 回撤懲罰權重
+            'win_rate_weight': 0.20,          # 勝率權重
+            'trade_count_weight': 0,       # 交易次數權重
+            'drawdown_weight': 0.15           # 回撤懲罰權重
         },
         
         # 🔥 激進模式設定 (僅在 aggressive 模式下有效)
@@ -105,7 +109,7 @@ class TrainingConfig:
         'low_trade_penalty_factor': 0.75, # 低交易懲罰因子
         'show_process': False,           # 是否顯示詳細過程
     }
-    
+    RISK_FREE_RATE = 0.02
     # 📂 股票清單檔案路徑
     STOCK_LIST_FILES = {
         'TAIEX': "tw_stock.csv",      # 台股清單
@@ -148,142 +152,80 @@ def get_db_connection():
         print(f"❌ 資料庫連接錯誤: {e}")
         return None
 
-# ═══════════════════════════════════════════════════════════════
-# 🆕 單次交易最大跌幅/漲幅計算函數
-# ═══════════════════════════════════════════════════════════════
 
-def calc_trade_extremes(prices, dates, buy_signals, sell_signals):
-    """
-    計算單次交易內部的最大跌幅和最大漲幅（以股價為基準）
-    """
-    if not buy_signals or not sell_signals:
-        return 0.0, 0.0
-    
-    date2idx = {d: i for i, d in enumerate(dates)}
-    worst_drop = 0.0
-    best_gain = 0.0
-    
-    completed_trades = min(len(buy_signals), len(sell_signals))
-    
-    for i in range(completed_trades):
-        try:
-            buy_date, buy_price = buy_signals[i]
-            sell_date, sell_price = sell_signals[i]
-            
-            if buy_date not in date2idx or sell_date not in date2idx:
-                continue
-                
-            buy_idx = date2idx[buy_date]
-            sell_idx = date2idx[sell_date]
-            
-            if buy_idx >= sell_idx:
-                continue
-            
-            trade_period_prices = prices[buy_idx:sell_idx + 1]
-            
-            if len(trade_period_prices) == 0:
-                continue
-                
-            min_price = min(trade_period_prices)
-            max_price = max(trade_period_prices)
-            
-            drop_pct = (min_price - buy_price) / buy_price
-            gain_pct = (max_price - buy_price) / buy_price
-            
-            worst_drop = min(worst_drop, drop_pct)
-            best_gain = max(best_gain, gain_pct)
-            
-        except (IndexError, TypeError, ZeroDivisionError):
-            continue
-    
-    return worst_drop * 100, best_gain * 100
 
 # ═══════════════════════════════════════════════════════════════
 # 📊 績效計算輔助函數
 # ═══════════════════════════════════════════════════════════════
 
 def calculate_detailed_metrics_for_traditional_ga(gene_result, prices, dates, precalculated, ga_params):
-    """為傳統 GA 計算詳細的績效指標（包含交易極值）"""
-    try:
-        def get_indicator_list(name, gene_indices, opt_keys, precalc_data):
-            params = [ga_params[k][gene_result[g_idx]] for g_idx, k in zip(gene_indices, opt_keys)]
-            key = tuple(params) if len(params) > 1 else params[0]
-            return np.array(precalc_data.get(name, {}).get(key, [np.nan] * len(prices)))
+        """為傳統 GA 計算詳細的績效指標（v5.2 - 改為調用 utils 標準函數）"""
+        try:
+            # --- 這部分不變，仍然需要運行策略來獲取原始數據 ---
+            def get_indicator_list(name, gene_indices, opt_keys, precalc_data):
+                params = [ga_params[k][gene_result[g_idx]] for g_idx, k in zip(gene_indices, opt_keys)]
+                key = tuple(params) if len(params) > 1 else params[0]
+                return np.array(precalc_data.get(name, {}).get(key, [np.nan] * len(prices)))
 
-        vix_ma_arr = get_indicator_list('vix_ma', [GENE_MAP['vix_ma_p']], ['vix_ma_period_options'], precalculated)
-        sent_ma_arr = get_indicator_list('sentiment_ma', [GENE_MAP['sentiment_ma_p']], ['sentiment_ma_period_options'], precalculated)
-        rsi_arr = get_indicator_list('rsi', [GENE_MAP['rsi_p']], ['rsi_period_options'], precalculated)
-        adx_arr = get_indicator_list('adx', [GENE_MAP['adx_p']], ['adx_period_options'], precalculated)
-        bb_key_indices = [GENE_MAP['bb_l_p'], GENE_MAP['bb_s_p']]
-        bb_key_opts = ['bb_length_options', 'bb_std_options']
-        bbl_arr = get_indicator_list('bbl', bb_key_indices, bb_key_opts, precalculated)
-        bbm_arr = get_indicator_list('bbm', bb_key_indices, bb_key_opts, precalculated)
-        bbu_arr = get_indicator_list('bbu', bb_key_indices, bb_key_opts, precalculated)
-        ma_s_arr = get_indicator_list('ma', [GENE_MAP['ma_s_p']], ['ma_period_options'], precalculated)
-        ma_l_arr = get_indicator_list('ma', [GENE_MAP['ma_l_p']], ['ma_period_options'], precalculated)
-        ema_s_arr = get_indicator_list('ema_s', [GENE_MAP['ema_s_p']], ['ema_s_period_options'], precalculated)
-        ema_m_arr = get_indicator_list('ema_m', [GENE_MAP['ema_m_p']], ['ema_m_period_options'], precalculated)
-        ema_l_arr = get_indicator_list('ema_l', [GENE_MAP['ema_l_p']], ['ema_l_period_options'], precalculated)
-        atr_arr = get_indicator_list('atr', [GENE_MAP['atr_p']], ['atr_period_options'], precalculated)
-        atr_ma_arr = get_indicator_list('atr_ma', [GENE_MAP['atr_p']], ['atr_period_options'], precalculated)
-        kd_key_indices = [GENE_MAP['kd_k_p'], GENE_MAP['kd_d_p'], GENE_MAP['kd_s_p']]
-        kd_key_opts = ['kd_k_period_options', 'kd_d_period_options', 'kd_smooth_period_options']
-        k_arr = get_indicator_list('kd_k', kd_key_indices, kd_key_opts, precalculated)
-        d_arr = get_indicator_list('kd_d', kd_key_indices, kd_key_opts, precalculated)
-        macd_key_indices = [GENE_MAP['macd_f_p'], GENE_MAP['macd_s_p'], GENE_MAP['macd_sig_p']]
-        macd_key_opts = ['macd_fast_period_options', 'macd_slow_period_options', 'macd_signal_period_options']
-        macd_line_arr = get_indicator_list('macd_line', macd_key_indices, macd_key_opts, precalculated)
-        macd_signal_arr = get_indicator_list('macd_signal', macd_key_indices, macd_key_opts, precalculated)
+            vix_ma_arr = get_indicator_list('vix_ma', [GENE_MAP['vix_ma_p']], ['vix_ma_period_options'], precalculated)
+            sent_ma_arr = get_indicator_list('sentiment_ma', [GENE_MAP['sentiment_ma_p']], ['sentiment_ma_period_options'], precalculated)
+            rsi_arr = get_indicator_list('rsi', [GENE_MAP['rsi_p']], ['rsi_period_options'], precalculated)
+            adx_arr = get_indicator_list('adx', [GENE_MAP['adx_p']], ['adx_period_options'], precalculated)
+            bb_key_indices = [GENE_MAP['bb_l_p'], GENE_MAP['bb_s_p']]
+            bb_key_opts = ['bb_length_options', 'bb_std_options']
+            bbl_arr = get_indicator_list('bbl', bb_key_indices, bb_key_opts, precalculated)
+            bbm_arr = get_indicator_list('bbm', bb_key_indices, bb_key_opts, precalculated)
+            bbu_arr = get_indicator_list('bbu', bb_key_indices, bb_key_opts, precalculated)
+            ma_s_arr = get_indicator_list('ma', [GENE_MAP['ma_s_p']], ['ma_period_options'], precalculated)
+            ma_l_arr = get_indicator_list('ma', [GENE_MAP['ma_l_p']], ['ma_period_options'], precalculated)
+            ema_s_arr = get_indicator_list('ema_s', [GENE_MAP['ema_s_p']], ['ema_s_period_options'], precalculated)
+            ema_m_arr = get_indicator_list('ema_m', [GENE_MAP['ema_m_p']], ['ema_m_period_options'], precalculated)
+            ema_l_arr = get_indicator_list('ema_l', [GENE_MAP['ema_l_p']], ['ema_l_period_options'], precalculated)
+            atr_arr = get_indicator_list('atr', [GENE_MAP['atr_p']], ['atr_period_options'], precalculated)
+            atr_ma_arr = get_indicator_list('atr_ma', [GENE_MAP['atr_p']], ['atr_period_options'], precalculated)
+            kd_key_indices = [GENE_MAP['kd_k_p'], GENE_MAP['kd_d_p'], GENE_MAP['kd_s_p']]
+            kd_key_opts = ['kd_k_period_options', 'kd_d_period_options', 'kd_smooth_period_options']
+            k_arr = get_indicator_list('kd_k', kd_key_indices, kd_key_opts, precalculated)
+            d_arr = get_indicator_list('kd_d', kd_key_indices, kd_key_opts, precalculated)
+            macd_key_indices = [GENE_MAP['macd_f_p'], GENE_MAP['macd_s_p'], GENE_MAP['macd_sig_p']]
+            macd_key_opts = ['macd_fast_period_options', 'macd_slow_period_options', 'macd_signal_period_options']
+            macd_line_arr = get_indicator_list('macd_line', macd_key_indices, macd_key_opts, precalculated)
+            macd_signal_arr = get_indicator_list('macd_signal', macd_key_indices, macd_key_opts, precalculated)
 
-        (portfolio_values, buy_indices, buy_prices, sell_indices, sell_prices, num_trades_from_numba) = run_strategy_numba_core(
-            np.array(gene_result, dtype=np.float64), np.array(prices),
-            vix_ma_arr, sent_ma_arr, rsi_arr, adx_arr,
-            bbl_arr, bbm_arr, bbu_arr, ma_s_arr, ma_l_arr,
-            ema_s_arr, ema_m_arr, ema_l_arr, atr_arr, atr_ma_arr,
-            k_arr, d_arr, macd_line_arr, macd_signal_arr,
-            ga_params['commission_rate'], 61
-        )
+            (portfolio_values, buy_indices, buy_prices, sell_indices, sell_prices, num_trades_from_numba) = run_strategy_numba_core(
+                np.array(gene_result, dtype=np.float64), np.array(prices),
+                vix_ma_arr, sent_ma_arr, rsi_arr, adx_arr,
+                bbl_arr, bbm_arr, bbu_arr, ma_s_arr, ma_l_arr,
+                ema_s_arr, ema_m_arr, ema_l_arr, atr_arr, atr_ma_arr,
+                k_arr, d_arr, macd_line_arr, macd_signal_arr,
+                ga_params['commission_rate'], 61
+            )
+            # --- 核心修改點在這裡 ---
+            # 1. 格式化交易信號以符合 utils 的要求 (字典列表)
+            buy_signals_formatted = [{'date': dates[i], 'price': buy_prices[idx]} for idx, i in enumerate(buy_indices)]
+            sell_signals_formatted = [{'date': dates[i], 'price': sell_prices[idx]} for idx, i in enumerate(sell_indices)]
+            
+            # 2. 直接調用 utils 中的標準化計算函數
+            detailed_metrics = calculate_performance_metrics(
+                portfolio_values.tolist(),
+                dates,
+                buy_signals_formatted,
+                sell_signals_formatted,
+                prices,
+                risk_free_rate=ga_params.get('risk_free_rate', 0.04),
+                commission_rate=ga_params.get('commission_rate', 0.005)
+            )
+            return detailed_metrics
 
-        buy_signals_list = [(dates[buy_indices[k]], buy_prices[k]) for k in range(len(buy_indices))]
-        sell_signals_list = [(dates[sell_indices[k]], sell_prices[k]) for k in range(len(sell_indices))]
-        basic_metrics = calculate_performance_metrics(portfolio_values.tolist(), dates, buy_signals_list, sell_signals_list, prices)
-
-        average_trade_return = 0.0
-        if num_trades_from_numba > 0 and len(buy_prices) > 0 and len(sell_prices) > 0:
-            total_trade_returns = 0.0
-            valid_trades = 0
-            completed_trades = min(len(buy_prices), len(sell_prices))
-            for i in range(completed_trades):
-                buy_p, sell_p = buy_prices[i], sell_prices[i]
-                if np.isfinite(buy_p) and np.isfinite(sell_p) and buy_p > 0:
-                    total_trade_returns += (sell_p - buy_p) / buy_p
-                    valid_trades += 1
-            if valid_trades > 0:
-                average_trade_return = total_trade_returns / valid_trades
-
-        max_drop_pct, max_gain_pct = calc_trade_extremes(prices, dates, buy_signals_list, sell_signals_list)
-
-        detailed_metrics = {
-            'total_return': basic_metrics.get('period_return_pct', 0) / 100,
-            'max_drawdown': basic_metrics.get('max_drawdown_pct', 0) / 100,
-            'profit_factor': basic_metrics.get('profit_factor', 0.01),
-            'trade_count': num_trades_from_numba,
-            'std_dev': np.std(portfolio_values.tolist()) if len(portfolio_values.tolist()) > 1 else 0.001,
-            'win_rate_pct': basic_metrics.get('win_rate_pct', 0.0),
-            'sharpe_ratio': basic_metrics.get('sharpe_ratio', 0.0),
-            'average_trade_return': average_trade_return,
-            'max_trade_drop_pct': max_drop_pct,
-            'max_trade_gain_pct': max_gain_pct
-        }
-        return detailed_metrics
-    except Exception as e:
-        print(f"❌ 計算詳細指標時發生錯誤: {e}")
-        traceback.print_exc()
-        return {
-            'total_return': 0, 'max_drawdown': 1, 'profit_factor': 0.01,
-            'trade_count': 0, 'std_dev': 1, 'win_rate_pct': 0, 'sharpe_ratio': 0,
-            'average_trade_return': 0, 'max_trade_drop_pct': 0.0, 'max_trade_gain_pct': 0.0
-        }
+        except Exception as e:
+            print(f"❌ 計算詳細指標時發生錯誤: {e}")
+            traceback.print_exc()
+            # 返回一個包含所有鍵的失敗物件，以避免後續錯誤
+            return {
+                'total_return': 0, 'max_drawdown': 1, 'profit_factor': 0.01,
+                'trade_count': 0, 'std_dev': 1, 'win_rate_pct': 0, 'sharpe_ratio': 0,
+                'average_trade_return': 0, 'max_trade_drop_pct': 0.0, 'max_trade_gain_pct': 0.0
+            }
 
 # ═══════════════════════════════════════════════════════════════
 # 🚀 主要訓練引擎
@@ -324,6 +266,7 @@ def run_offline_training(stock_list_csv_path, market_type, config):
 
     ga_params = GA_PARAMS_CONFIG.copy()
     ga_params['nsga2_enabled'] = config.ENABLE_NSGA2
+    ga_params['risk_free_rate'] = config.RISK_FREE_RATE
     if config.ENABLE_NSGA2:
         ga_params.update(config.NSGA2_CONFIG)
         print(f"🔧 使用 NSGA-II 多目標優化配置 (選擇方法: {config.NSGA2_CONFIG['nsga2_selection_method']})")
