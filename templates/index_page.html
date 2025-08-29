@@ -2,86 +2,150 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>策略訓練平台</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>智能投資羅盤</title>
 
-    <meta name="theme-color" content="#ffffff"/>
+    <meta name="theme-color" content="#1a202c"/>
     <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <link rel="apple-touch-icon" href="/static/icons/apple-touch-icon.png">
     <link rel="manifest" href="/static/manifest.json">
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
     
     <style>
         :root {
-            --primary-color: #6d5edc;
-            --gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            --bg-color: #f0f2f5;
-            --card-bg: #ffffff;
-            --text-primary: #1f2937;
-            --text-secondary: #6b7280;
-            --border-color: #e5e7eb;
-            --shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+            --bg-color: #1a202c;
+            --card-bg: rgba(23, 25, 35, 0.6);
+            --text-primary: #edf2f7;
+            --text-secondary: #a0aec0;
+            --accent-color: #00B5D8;
+            --accent-gradient: linear-gradient(45deg, #00B5D8, #764ba2);
+            --border-color: rgba(255, 255, 255, 0.1);
+            --input-bg: rgba(0,0,0,0.2);
+            --success-color: #38A169;
+            --error-color: #E53E3E;
+            --positive-text: #48bb78;
+            --negative-text: #f56565;
+            --hint-color: #3182ce;
         }
 
         * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-        html { scroll-behavior: smooth; }
+        html, body {
+            height: 100%;
+        }
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Noto Sans TC', 'Segoe UI', Roboto, sans-serif;
             background-color: var(--bg-color);
             color: var(--text-primary);
-            padding-bottom: 80px; /* For bottom nav */
+            padding-bottom: 0;
+            overflow-x: hidden;
+            position: relative;
         }
         
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: linear-gradient(315deg, rgba(102, 126, 234, 0.2) 0%, rgba(118, 75, 162, 0.3) 50%, rgba(0, 181, 216, 0.2) 100%);
+            background-size: 200% 200%;
+            animation: gradient-animation 15s ease infinite;
+            z-index: -1;
+        }
+
+        @keyframes gradient-animation {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+
+        #app-container {
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+        }
+
+        main {
+            padding: 16px;
+            flex-grow: 1;
+            overflow-y: auto;
+        }
+        
+        .page-header-sticky-wrapper {
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+            flex-shrink: 0;
+        }
+
         .page-header {
-            background: var(--card-bg);
-            padding: 12px 16px;
+            background: rgba(26, 32, 44, 0.95);
+            padding-top: calc(12px + env(safe-area-inset-top));
+            padding-top: calc(12px + constant(safe-area-inset-top));
+            padding-left: 16px;
+            padding-right: 16px;
+            padding-bottom: 12px;
             border-bottom: 1px solid var(--border-color);
-            position: sticky; top: 0; z-index: 1000;
             display: flex;
             justify-content: space-between;
             align-items: center;
         }
-        .page-header h1 { font-size: 1.2rem; font-weight: 600; color: var(--primary-color); }
+
+        .page-header h1 { font-size: 1.2rem; font-weight: 600; color: var(--text-primary); }
         .header-actions a {
             font-size: 0.8rem;
-            color: var(--primary-color);
+            color: var(--text-primary);
             text-decoration: none;
-            background-color: #f0f2f5;
+            background-color: var(--input-bg);
             padding: 6px 12px;
             border-radius: 16px;
             font-weight: 500;
+            border: 1px solid var(--border-color);
+            transition: background-color 0.2s;
         }
+        .header-actions a:hover { background-color: rgba(0,0,0,0.4); }
 
-        main { padding: 16px; }
-        .page-view { display: none; animation: fadeIn 0.3s ease-in-out; }
+        .page-view { display: none; animation: fadeIn 0.5s ease-out; }
         .page-view.active { display: block; }
         @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(10px); }
+            from { opacity: 0; transform: translateY(20px); }
             to { opacity: 1; transform: translateY(0); }
         }
 
         .bottom-nav {
-            position: fixed; bottom: 0; left: 0; right: 0; height: 70px;
-            background-color: rgba(255, 255, 255, 0.9);
-            display: flex; justify-content: space-around;
+            position: sticky;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background-color: var(--card-bg);
+            display: flex;
+            justify-content: space-around;
             border-top: 1px solid var(--border-color);
-            box-shadow: 0 -2px 10px rgba(0,0,0,0.05); z-index: 1000;
-            backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+            z-index: 1000;
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            padding-bottom: env(safe-area-inset-bottom);
+            padding-bottom: constant(safe-area-inset-bottom);
+            height: calc(70px + env(safe-area-inset-bottom));
+            height: calc(70px + constant(safe-area-inset-bottom));
+            flex-shrink: 0;
         }
         .nav-button {
             display: flex; flex-direction: column; align-items: center;
             gap: 4px; font-size: 0.7rem; color: var(--text-secondary);
             background: none; border: none; cursor: pointer;
             padding: 8px; border-radius: 8px; width: 80px;
+            transition: color 0.2s;
         }
         .nav-button-icon { font-size: 1.4rem; }
-        .nav-button.active { color: var(--primary-color); }
+        .nav-button.active { color: var(--accent-color); }
 
         .card {
             background: var(--card-bg); padding: 20px;
-            border-radius: 12px; margin-bottom: 20px;
-            box-shadow: var(--shadow);
+            border-radius: 16px; margin-bottom: 20px;
+            border: 1px solid var(--border-color);
+            box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
         }
         .card-header { 
             margin-bottom: 20px;
@@ -89,94 +153,209 @@
             justify-content: space-between;
             align-items: center;
         }
-        .card-header h2 { font-size: 1.1rem; font-weight: 600; margin-bottom: 8px; }
+        .card-header h2 { font-size: 1.1rem; font-weight: 600; margin-bottom: 8px; color: var(--text-primary); }
         .card-header p { font-size: 0.85rem; color: var(--text-secondary); }
         
         .help-icon {
             width: 24px; height: 24px;
-            background-color: var(--bg-color);
-            border-radius: 50%;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            color: var(--text-secondary);
-            font-weight: bold;
-            cursor: pointer;
-            font-size: 1rem;
-            margin-left: 10px;
+            background-color: var(--input-bg);
+            border-radius: 50%; border: 1px solid var(--border-color);
+            display: flex; justify-content: center; align-items: center;
+            color: var(--text-secondary); font-weight: bold; cursor: pointer;
+            font-size: 1rem; margin-left: 10px; flex-shrink: 0;
             transition: background-color 0.2s, color 0.2s;
-            flex-shrink: 0;
         }
-        .help-icon:hover {
-            background-color: var(--primary-color);
-            color: white;
-        }
+        .help-icon:hover { background-color: var(--accent-color); color: white; }
 
         .form-group { margin-bottom: 16px; }
-        .form-group label { display: block; margin-bottom: 6px; font-weight: 500; font-size: 0.9rem; }
+        .form-group label { display: block; margin-bottom: 8px; font-weight: 500; font-size: 0.9rem; color: var(--text-secondary); }
         .form-group input, .form-group select, .form-group textarea {
             width: 100%; padding: 14px; border: 1px solid var(--border-color);
-            border-radius: 8px; font-size: 1rem; background-color: #f9fafb;
+            border-radius: 8px; font-size: 1rem; color: var(--text-primary);
+            background-color: var(--input-bg);
+            transition: all 0.2s ease;
         }
         .form-group input:focus, .form-group select:focus, .form-group textarea:focus {
-            outline: none; border-color: var(--primary-color);
-            box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.2);
+            outline: none; border-color: var(--accent-color);
+            box-shadow: 0 0 0 3px rgba(0, 181, 216, 0.3);
         }
+        input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(1); }
         .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
 
         .btn {
             width: 100%; padding: 15px; border: none; border-radius: 8px;
             font-size: 1rem; font-weight: 600; cursor: pointer;
-            background: var(--gradient); color: white;
+            background: var(--accent-gradient); color: white;
+            transition: all 0.2s ease;
         }
-        .btn:disabled { background: #bdc3c7; cursor: not-allowed; }
+        .btn:hover { transform: translateY(-2px); box-shadow: 0 4px 20px rgba(0, 181, 216, 0.25); }
+        .btn:active { transform: translateY(0); box-shadow: none; }
+        .btn:disabled { background: #4a5568; cursor: not-allowed; transform: none; box-shadow: none; }
+        
+        .batch-actions-container {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+        .btn-secondary {
+            background: transparent;
+            border: 2px solid var(--border-color);
+            color: var(--text-secondary);
+        }
+        .btn-secondary:not(:disabled):hover {
+            background: var(--input-bg);
+            border-color: var(--text-secondary);
+            color: var(--text-primary);
+        }
+        .btn-delete-batch {
+            border-color: var(--error-color);
+            color: var(--error-color);
+        }
+        .btn-delete-batch:not(:disabled):hover {
+            background: var(--error-color);
+            color: white;
+            border-color: var(--error-color);
+        }
+
+        /* === MODIFIED: Simplified Weight Control Styles === */
+        .weight-control-group {
+            margin-bottom: 16px;
+        }
+        .weight-control-label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 500;
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+        }
+        .weight-control-inputs {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .weight-control-inputs input[type="range"] {
+            flex-grow: 1;
+        }
+        .weight-control-inputs input[type="number"] {
+            width: 70px;
+            padding: 8px; /* Reduced padding */
+            text-align: center;
+            font-size: 0.9rem; /* Smaller font */
+            background-color: var(--input-bg); /* Match other inputs */
+            border: 1px solid var(--border-color); /* Match other inputs */
+            border-radius: 6px; /* Match other inputs */
+            color: var(--text-primary); /* Match other inputs */
+            -moz-appearance: textfield;
+            appearance: textfield;
+        }
+        .weight-control-inputs input[type="number"]::-webkit-outer-spin-button,
+        .weight-control-inputs input[type="number"]::-webkit-inner-spin-button {
+            -webkit-appearance: none;
+            appearance: none;
+            margin: 0;
+        }
+        .weight-control-inputs input[type="number"]:focus {
+            outline: none;
+            border-color: var(--accent-color);
+            box-shadow: 0 0 0 3px rgba(0, 181, 216, 0.3);
+        }
+
+        input[type=range] {
+            -webkit-appearance: none;
+            appearance: none;
+            background: transparent;
+        }
+        input[type=range]:focus { outline: none; }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%; height: 6px; cursor: pointer; background: #2d3748; border-radius: 3px;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            height: 18px; width: 18px; border-radius: 50%; background: var(--accent-color); cursor: pointer;
+            -webkit-appearance: none;
+            appearance: none;
+            margin-top: -6px; box-shadow: 0 0 10px rgba(0, 181, 216, 0.5);
+        }
+        #weight_total { color: var(--text-secondary); font-weight: 500; text-align: center; margin-top: 10px; }
 
         .loading { text-align: center; padding: 40px 0; display: none; }
-        .spinner { width: 36px; height: 36px; border: 4px solid #e0e0e0; border-top-color: var(--primary-color); border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 12px; }
+        .spinner { width: 36px; height: 36px; border: 4px solid var(--input-bg); border-top-color: var(--accent-color); border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 12px; }
         @keyframes spin { 100% { transform: rotate(360deg); } }
         .loading p { font-size: 0.9rem; color: var(--text-secondary); }
 
         .progress-container { display: none; text-align: center; margin-top: 20px; }
         .progress-bar-wrapper {
-            background-color: #e9ecef;
-            border-radius: 8px;
-            padding: 4px;
-            border: 1px solid var(--border-color);
-            margin-bottom: 8px;
+            background-color: var(--input-bg);
+            border-radius: 8px; padding: 4px; border: 1px solid var(--border-color); margin-bottom: 8px;
         }
         .progress-bar {
-            width: 0%;
-            height: 10px;
-            background: var(--gradient);
-            border-radius: 4px;
-            transition: width 0.4s ease-out;
+            width: 0%; height: 10px; background: var(--accent-gradient);
+            border-radius: 4px; transition: width 0.4s ease-out;
         }
         #progress-text { font-size: 0.9rem; color: var(--text-secondary); }
 
-        .result-card { background: var(--card-bg); border-radius: 12px; margin-bottom: 20px; box-shadow: var(--shadow); }
+        .result-card { 
+            background: var(--card-bg); border-radius: 12px; margin-bottom: 20px; 
+            border: 1px solid var(--border-color); backdrop-filter: blur(10px);
+        }
         .result-header { padding: 12px 16px; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center; }
-        .result-header h3 { font-size: 1.1rem; font-weight: 600; color: var(--primary-color); }
+        .result-header h3 { font-size: 1.1rem; font-weight: 600; color: var(--accent-color); }
         .result-body { padding: 16px; }
         
         .data-list { list-style: none; }
-        .data-list-item { display: flex; justify-content: space-between; align-items: center; padding: 12px 0; font-size: 0.9rem; border-bottom: 1px solid #f3f4f6; }
+        .data-list-item { display: flex; justify-content: space-between; align-items: center; padding: 12px 0; font-size: 0.9rem; border-bottom: 1px solid var(--border-color); }
         .data-list-item:last-child { border-bottom: none; }
         .data-list-item .label { color: var(--text-secondary); }
         .data-list-item .value { font-weight: 600; }
-        .value.positive { color: #16a34a; } .value.negative { color: #dc2626; }
+        .value.positive { color: var(--positive-text); } .value.negative { color: var(--negative-text); }
         
-        .description { background-color: #f9fafb; padding: 12px; border-radius: 8px; margin-top: 16px; white-space: pre-wrap; font-family: 'Courier New', monospace; font-size: 0.8rem; max-height: 150px; overflow-y: auto; border: 1px solid var(--border-color); }
+        .data-list-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0 16px;
+        }
 
-        .chart-preview-container { border: 1px solid var(--border-color); border-radius: 8px; padding: 8px; cursor: pointer; margin-top: 16px; }
+        .description { background-color: var(--input-bg); padding: 12px; border-radius: 8px; margin-top: 16px; white-space: pre-wrap; font-family: 'Courier New', monospace; font-size: 0.8rem; max-height: 150px; overflow-y: auto; border: 1px solid var(--border-color); }
+
+        .chart-preview-container { border: 1px solid var(--border-color); border-radius: 8px; padding: 8px; cursor: pointer; margin-top: 16px; background: rgba(0,0,0,0.2); }
         .chart-preview-image { width: 100%; border-radius: 4px; display: block; }
         
-        .chart-modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.85); z-index: 2000; display: none; flex-direction: column; padding-top: 45px; box-sizing: border-box; }
-        .chart-modal-content { width: 100%; height: 100%; background-color: #fff; overflow: hidden; }
+        .chart-modal { 
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%; 
+            background-color: rgba(0, 0, 0, 0.85); 
+            z-index: 2000; display: none; 
+            flex-direction: column; 
+            padding-top: env(safe-area-inset-top);
+            padding-top: constant(safe-area-inset-top);
+            box-sizing: border-box; 
+            cursor: pointer;
+        }
+        .chart-modal-content { 
+            width: 100%; height: 100%; 
+            background-color: #fff; 
+            overflow: hidden; 
+            cursor: default;
+        }
         .chart-modal-iframe { width: 100%; height: 100%; border: none; }
-        .chart-modal-close { position: absolute; top: 10px; right: 10px; width: 32px; height: 32px; background-color: rgba(0, 0, 0, 0.5); border: none; border-radius: 50%; font-size: 20px; font-weight: bold; color: #fff; cursor: pointer; line-height: 32px; text-align: center; z-index: 2001; }
+        .chart-modal-close { 
+            position: absolute; 
+            top: calc(10px + env(safe-area-inset-top));
+            top: calc(10px + constant(safe-area-inset-top));
+            right: 10px; 
+            width: 32px; height: 32px; 
+            background-color: rgba(0, 0, 0, 0.5); 
+            border: none; border-radius: 50%; 
+            font-size: 20px; font-weight: bold; color: #fff; 
+            cursor: pointer; line-height: 32px; text-align: center; 
+            z-index: 2001; 
+        }
 
+        /* === MODIFIED: Reverted to original Strategy Card styles === */
         .strategy-list { display: flex; flex-direction: column; gap: 16px; }
-        .strategy-list-card { background: var(--card-bg); border-radius: 12px; box-shadow: var(--shadow); border-left: 4px solid var(--primary-color); overflow: hidden; }
+        .strategy-list-card { 
+            background: var(--card-bg); border-radius: 12px; 
+            border: 1px solid var(--border-color); backdrop-filter: blur(10px);
+            border-left: 4px solid var(--accent-color); overflow: hidden; 
+        }
         .strategy-list-header { padding: 12px 16px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; }
         .strategy-list-header-info { flex-grow: 1; }
         .strategy-list-header-info h3 { font-size: 1.2rem; font-weight: 600; }
@@ -184,132 +363,138 @@
         .strategy-list-chevron { font-size: 1.5rem; color: var(--text-secondary); transition: transform 0.3s ease-in-out; }
         .strategy-list-header.expanded .strategy-list-chevron { transform: rotate(180deg); }
         .strategy-list-content { max-height: 0; opacity: 0; overflow: hidden; transition: max-height 0.4s ease-in-out, opacity 0.3s ease-in, padding 0.4s ease-in-out; padding: 0 16px; }
-        .strategy-list-content.expanded { max-height: 550px; opacity: 1; padding: 16px; border-top: 1px solid var(--border-color); }
+        .strategy-list-content.expanded { max-height: 600px; opacity: 1; padding: 16px; border-top: 1px solid var(--border-color); }
         .strategy-list-body { padding: 0; }
         .strategy-list-footer { padding-top: 16px; margin-top: 16px; border-top: 1px solid var(--border-color); display: flex; gap: 8px; justify-content: flex-end; }
-        .strategy-list-footer button { padding: 8px 12px; font-size: 0.8rem; border-radius: 20px; border: 1px solid; cursor: pointer; }
-        .btn-backtest { border-color: #16a34a; color: #16a34a; background: #f0fdf4; }
-        .btn-delete { border-color: #ef4444; color: #ef4444; background: #fef2f2; }
-        
-        .strategy-select-checkbox { transform: scale(1.5); margin-right: 16px; cursor: pointer; }
-        
-        .message-box { padding: 15px; border-radius: 8px; margin-bottom: 20px; font-weight: 500; }
-        .error { background: #fff5f5; border-left: 5px solid #e74c3c; color: #c0392b; }
-        .success { background: #f0fff4; border-left: 5px solid #27ae60; color: #218838; }
-        .hint-bar { background: #e7f3ff; border-left: 5px solid #3498db; color: #2980b9; }
+        .strategy-list-footer button { padding: 8px 12px; font-size: 0.8rem; border-radius: 20px; border: 1px solid; cursor: pointer; background: transparent; transition: background-color 0.2s, color 0.2s; }
+        .btn-backtest { border-color: var(--positive-text); color: var(--positive-text); }
+        .btn-backtest:hover { background-color: var(--positive-text); color: white; }
+        .btn-delete { border-color: var(--negative-text); color: var(--negative-text); }
+        .btn-delete:hover { background-color: var(--negative-text); color: white; }
+        .strategy-select-checkbox { transform: scale(1.5); margin-right: 16px; cursor: pointer; accent-color: var(--accent-color); }
 
-        .help-modal { display: none; position: fixed; z-index: 2000; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.6); display: flex; justify-content: center; align-items: center; padding: 16px; animation: fadeInModal 0.3s ease-out; }
+        
+        .message-box { padding: 15px; border-radius: 8px; margin-bottom: 20px; font-weight: 500; border-left: 5px solid; }
+        .error { background: rgba(229, 62, 62, 0.2); border-color: var(--error-color); color: #feb2b2; }
+        .success { background: rgba(56, 161, 105, 0.2); border-color: var(--success-color); color: #9ae6b4; }
+        .hint-bar { background: rgba(49, 130, 206, 0.2); border-color: var(--hint-color); color: #90cdf4; }
+
+        .help-modal { display: none; position: fixed; z-index: 2000; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.7); display: flex; justify-content: center; align-items: center; padding: 16px; animation: fadeInModal 0.3s ease-out; backdrop-filter: blur(5px); }
         @keyframes fadeInModal { from { opacity: 0; } to { opacity: 1; } }
-        .help-modal-content { background-color: var(--card-bg); color: var(--text-primary); border-radius: 12px; padding: 24px; width: 100%; max-width: 500px; max-height: 80vh; overflow-y: auto; position: relative; box-shadow: 0 10px 25px rgba(0,0,0,0.1); }
-        .help-modal-close { position: absolute; top: 10px; right: 10px; width: 32px; height: 32px; line-height: 32px; border: none; background: var(--bg-color); border-radius: 50%; font-size: 1.5rem; color: var(--text-secondary); cursor: pointer; text-align: center; }
-        #helpModalTitle { margin-bottom: 16px; color: var(--primary-color); }
+        .help-modal-content { 
+            background: var(--card-bg); color: var(--text-primary); 
+            border-radius: 12px; padding: 24px; width: 100%; max-width: 500px; 
+            max-height: 80vh; overflow-y: auto; position: relative; 
+            border: 1px solid var(--border-color);
+        }
+        .help-modal-close { position: absolute; top: 10px; right: 10px; width: 32px; height: 32px; line-height: 32px; border: none; background: var(--input-bg); border-radius: 50%; font-size: 1.5rem; color: var(--text-secondary); cursor: pointer; text-align: center; }
+        #helpModalTitle { margin-bottom: 16px; color: var(--accent-color); }
         #helpModalBody .help-section { margin-bottom: 16px; }
         #helpModalBody h3 { font-size: 1rem; font-weight: 600; margin-bottom: 8px; padding-bottom: 4px; border-bottom: 1px solid var(--border-color); }
         #helpModalBody p { font-size: 0.9rem; line-height: 1.6; color: var(--text-secondary); }
         #helpModalBody strong { color: var(--text-primary); font-weight: 600; }
+        #helpModalBody ul { list-style-position: inside; padding-left: 8px; }
+        #helpModalBody li { margin-bottom: 8px; }
 
-        /* START: Enhanced allocator UI styles */
         .allocator-selected-item {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            background-color: #f9fafb;
-            border-radius: 8px;
-            padding: 10px 15px;
-            margin-bottom: 8px;
-            font-size: 0.95rem;
+            display: flex; justify-content: space-between; align-items: center;
+            background-color: var(--input-bg); border-radius: 8px;
+            padding: 10px 15px; margin-bottom: 8px; font-size: 0.95rem;
             border: 1px solid var(--border-color);
         }
         .remove-strategy-btn {
-            background-color: #fef2f2;
-            color: #ef4444;
-            border: 1px solid #fecaca;
-            border-radius: 50%;
-            width: 24px;
-            height: 24px;
-            font-weight: bold;
-            cursor: pointer;
-            line-height: 22px;
-            text-align: center;
-            transition: all 0.2s;
+            background-color: rgba(239, 68, 68, 0.2); color: #ef4444;
+            border: 1px solid rgba(254, 202, 202, 0.5); border-radius: 50%;
+            width: 24px; height: 24px; font-weight: bold; cursor: pointer;
+            line-height: 22px; text-align: center; transition: all 0.2s;
         }
-        .remove-strategy-btn:hover {
-            background-color: #ef4444;
-            color: white;
-        }
+        .remove-strategy-btn:hover { background-color: #ef4444; color: white; }
 
-        #allocation-results .result-card {
-            animation: fadeIn 0.5s ease-out;
-        }
+        #allocation-results .result-card { animation: fadeIn 0.5s ease-out; }
         
-        .allocation-grid {
-            display: grid;
-            grid-template-columns: 1fr;
-            gap: 16px;
-        }
+        .allocation-grid { display: grid; grid-template-columns: 1fr; gap: 16px; }
         .allocation-item-card {
-            background-color: var(--card-bg);
-            border-radius: 12px;
-            padding: 16px;
-            border-left: 5px solid;
-            box-shadow: var(--shadow);
+            background-color: var(--card-bg); border-radius: 12px; padding: 16px;
+            border: 1px solid var(--border-color);
+            border-left: 5px solid; backdrop-filter: blur(10px);
         }
         .allocation-item-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 12px;
+            display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;
         }
-        .allocation-item-header .ticker {
-            font-size: 1.3rem;
-            font-weight: 700;
-        }
-        .allocation-item-header .percentage {
-            font-size: 1.5rem;
-            font-weight: 700;
-            color: var(--primary-color);
-        }
-        .allocator-result-bar-container {
-             width: 100%; background-color: #e9ecef; border-radius: 8px; margin: 4px 0;
-        }
-        .allocator-result-bar {
-             height: 8px; border-radius: 8px; background: var(--gradient); transition: width 0.8s ease-out;
-        }
+        .allocation-item-header .ticker { font-size: 1.3rem; font-weight: 700; color: var(--text-primary); }
+        .allocation-item-header .percentage { font-size: 1.5rem; font-weight: 700; color: var(--accent-color); }
+        .allocator-result-bar-container { width: 100%; background-color: var(--input-bg); border-radius: 8px; margin: 4px 0; }
+        .allocator-result-bar { height: 8px; border-radius: 8px; background: var(--accent-gradient); transition: width 0.8s ease-out; }
         .allocation-role {
-            font-size: 0.8rem;
-            font-weight: 500;
-            padding: 4px 10px;
-            border-radius: 16px;
-            color: white;
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-            margin-top: 4px;
+            font-size: 0.8rem; font-weight: 500; padding: 4px 10px; border-radius: 16px;
+            color: white; display: inline-flex; align-items: center; gap: 6px; margin-top: 4px;
         }
-        /* Role-specific colors */
         .role-growth { background-color: #22c55e; }
         .role-satellite { background-color: #f59e0b; }
         .role-stable { background-color: #3b82f6; }
 
         .allocation-justification {
-            font-size: 0.9rem;
-            color: var(--text-secondary);
-            line-height: 1.6;
-            margin-top: 10px;
+            font-size: 0.9rem; color: var(--text-secondary); line-height: 1.6; margin-top: 10px;
         }
-        /* END: Enhanced allocator UI styles */
 
+        .signal-type-selector {
+            display: flex; gap: 8px; margin-bottom: 16px; background-color: var(--input-bg);
+            padding: 6px; border-radius: 25px; border: 1px solid var(--border-color);
+        }
+        .signal-type-selector label {
+            flex-grow: 1; text-align: center; cursor: pointer; padding: 10px;
+            border-radius: 20px; font-size: 0.9rem; font-weight: 500;
+            color: var(--text-secondary);
+        }
+        .signal-type-selector input[type="radio"] { display: none; }
+        .signal-type-selector input[type="radio"]:checked + label {
+            background: var(--accent-color); color: white;
+            font-weight: 600; box-shadow: 0 4px 12px rgba(0, 181, 216, 0.2);
+        }
+        #signals-grid { display: flex; flex-direction: column; gap: 16px; }
+        .signal-card {
+            background: var(--card-bg); border-radius: 12px;
+            border: 1px solid var(--border-color);
+            backdrop-filter: blur(10px); overflow: hidden;
+        }
+        .signal-card-header {
+            padding: 12px 16px; display: flex; justify-content: space-between;
+            align-items: center; border-bottom: 1px solid var(--border-color);
+        }
+        .signal-card-header .ticker { font-size: 1.2rem; font-weight: 600; color: var(--text-primary); }
+        .signal-card-body { padding: 16px; font-size: 0.9rem; line-height: 1.6; color: var(--text-secondary); }
+        .signal-price { font-weight: bold; margin-top: 10px; }
+        .signal-buy { color: var(--positive-text); }
+        .signal-sell { color: var(--negative-text); }
+        .signal-card-footer {
+            background-color: var(--input-bg); padding: 10px 16px; font-size: 0.8rem;
+            color: var(--text-secondary); display: flex; justify-content: space-between;
+            flex-wrap: wrap; gap: 8px; border-top: 1px solid var(--border-color);
+        }
+        .signal-card-footer .value { font-weight: 600; color: var(--text-primary); }
+
+        #lookup-results-container {
+            margin-top: 20px;
+        }
+        #lookup-results-container .loading {
+            padding: 20px 0;
+        }
+        #lookup-results-container .result-card {
+             animation: fadeIn 0.5s ease-out;
+        }
     </style>
 </head>
 <body>
 
     <div class="container" id="app-container">
-        <header class="page-header">
-            <h1>🧬 策略訓練平台</h1>
-            <div class="header-actions">
-                <a href="/">分析平台</a>
-            </div>
-        </header>
+        <div class="page-header-sticky-wrapper">
+            <header class="page-header">
+                <h1>🧬 策略訓練平台</h1>
+                <div class="header-actions">
+                    <a href="javascript:void(0);" onclick="handleLogout()">登出</a>
+                </div>
+            </header>
+        </div>
 
         <main>
             <div id="page-trainer" class="page-view active">
@@ -322,15 +507,40 @@
                     <div class="form-grid"><div class="form-group"><label for="start_date">開始日期</label><input type="date" id="start_date"></div><div class="form-group"><label for="end_date">結束日期</label><input type="date" id="end_date"></div></div>
                     <div class="form-group"><label for="min_trades">最少交易次數 (1-20)</label><input type="number" id="min_trades" value="4" min="1" max="20" oninput="validateInput(this)"></div>
                 </div>
+
                 <div class="card">
                      <div class="card-header">
                         <div><h2>⚖️ 訓練權重設定</h2></div>
                         <span class="help-icon" onclick="showHelpModal('weights')">?</span>
                      </div>
-                     <div class="form-group"><label>總報酬率: <span id="total_return_value">0.35</span></label><input type="range" id="total_return_weight" min="0" max="1" step="0.01" value="0.35" oninput="updateWeight('total_return', this.value)"></div>
-                    <div class="form-group"><label>平均交易報酬: <span id="avg_trade_return_value">0.30</span></label><input type="range" id="avg_trade_return_weight" min="0" max="1" step="0.01" value="0.30" oninput="updateWeight('avg_trade_return', this.value)"></div>
-                    <div class="form-group"><label>勝率: <span id="win_rate_value">0.30</span></label><input type="range" id="win_rate_weight" min="0" max="1" step="0.01" value="0.30" oninput="updateWeight('win_rate', this.value)"></div>
-                    <div class="form-group"><label>回撤懲罰: <span id="drawdown_value">0.05</span></label><input type="range" id="drawdown_weight" min="0" max="1" step="0.01" value="0.05" oninput="updateWeight('drawdown', this.value)"></div>
+                     <div class="weight-control-group">
+                        <label class="weight-control-label">總報酬率</label>
+                        <div class="weight-control-inputs">
+                            <input type="range" id="total_return_weight" min="0" max="1" step="0.01" value="0.35" oninput="updateWeight('total_return', this.value)">
+                            <input type="number" id="total_return_input" min="0" max="1" step="0.01" value="0.35" oninput="updateSlider('total_return', this.value)">
+                        </div>
+                    </div>
+                    <div class="weight-control-group">
+                        <label class="weight-control-label">平均交易報酬</label>
+                        <div class="weight-control-inputs">
+                            <input type="range" id="avg_trade_return_weight" min="0" max="1" step="0.01" value="0.30" oninput="updateWeight('avg_trade_return', this.value)">
+                            <input type="number" id="avg_trade_return_input" min="0" max="1" step="0.01" value="0.30" oninput="updateSlider('avg_trade_return', this.value)">
+                        </div>
+                    </div>
+                    <div class="weight-control-group">
+                        <label class="weight-control-label">勝率</label>
+                        <div class="weight-control-inputs">
+                            <input type="range" id="win_rate_weight" min="0" max="1" step="0.01" value="0.30" oninput="updateWeight('win_rate', this.value)">
+                            <input type="number" id="win_rate_input" min="0" max="1" step="0.01" value="0.30" oninput="updateSlider('win_rate', this.value)">
+                        </div>
+                    </div>
+                    <div class="weight-control-group">
+                        <label class="weight-control-label">回撤懲罰</label>
+                        <div class="weight-control-inputs">
+                            <input type="range" id="drawdown_weight" min="0" max="1" step="0.01" value="0.05" oninput="updateWeight('drawdown', this.value)">
+                            <input type="number" id="drawdown_input" min="0" max="1" step="0.01" value="0.05" oninput="updateSlider('drawdown', this.value)">
+                        </div>
+                    </div>
                     <div id="weight_total">權重總和: 1.00</div>
                 </div>
                 <button class="btn" id="train-btn" onclick="startTraining()">🚀 開始訓練</button>
@@ -343,6 +553,24 @@
                 <div id="results"></div>
             </div>
 
+            <div id="page-explorer" class="page-view">
+                <div class="card">
+                    <div class="card-header">
+                        <div>
+                            <h2>🔭 探索策略庫</h2>
+                            <p>查詢資料庫中針對特定股票已存在的最佳策略。</p>
+                        </div>
+                        <span class="help-icon" onclick="showHelpModal('explorer')">?</span>
+                    </div>
+                    <div class="form-group">
+                        <label for="lookup-ticker">股票代號</label>
+                        <input type="text" id="lookup-ticker" placeholder="輸入代號後點擊下方按鈕查詢">
+                    </div>
+                    <button class="btn" id="lookup-btn" onclick="lookupStrategy()">🔍 開始查詢</button>
+                    <div id="lookup-results-container"></div>
+                </div>
+            </div>
+            
             <div id="page-backtester" class="page-view">
                 <div class="card">
                     <div class="card-header">
@@ -366,16 +594,48 @@
                     <div class="card-header">
                         <div>
                             <h2>📖 我的策略清單</h2>
-                            <p>勾選您想配置的策略，點擊下方按鈕進行智能配置。</p>
+                            <p>在此管理、比較並操作您儲存的所有策略。</p>
                         </div>
                         <span class="help-icon" onclick="showHelpModal('strategies')">?</span>
                     </div>
-                    <div style="margin-bottom: 20px;">
-                        <button class="btn" id="proceed-allocator-btn" onclick="proceedToAllocator()" disabled>進行資金配置 (已選 <span id="selected-strategy-count">0</span> 項)</button>
+                    <div class="batch-actions-container">
+                        <button class="btn" id="proceed-allocator-btn" onclick="proceedToAllocator()" disabled>資金配置 (已選 <span id="selected-strategy-count">0</span> 項)</button>
+                        <button class="btn btn-secondary btn-delete-batch" id="batch-delete-btn" onclick="batchDeleteStrategies()" disabled>刪除選取</button>
                     </div>
+
                     <div id="strategy-list-status"></div>
                     <div id="strategy-list-container"></div>
                 </div>
+            </div>
+            
+            <div id="page-signals" class="page-view">
+                <div class="card">
+                    <div class="card-header">
+                         <div>
+                            <h2>🎯 策略最新信號</h2>
+                            <p>篩選最新回測中符合買賣條件的策略。</p>
+                        </div>
+                        <span class="help-icon" onclick="showHelpModal('signals')">?</span>
+                    </div>
+                    <div class="form-group">
+                        <label for="market-select">市場選擇</label>
+                        <select id="market-select" class="form-group" onchange="loadStrategySignals()">
+                            <option value="TW">台股 (TW)</option>
+                            <option value="US">美股 (US)</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>信號類型</label>
+                        <div class="signal-type-selector">
+                            <input type="radio" id="signal-type-buy" name="signal_type" value="buy" checked onchange="loadStrategySignals()">
+                            <label for="signal-type-buy">🟢 買入</label>
+                            <input type="radio" id="signal-type-sell" name="signal_type" value="sell" onchange="loadStrategySignals()">
+                            <label for="signal-type-sell">🔴 賣出</label>
+                        </div>
+                    </div>
+                </div>
+                <div id="signals-loading" class="loading"><div class="spinner"></div><p>🤖 正在搜尋最新策略信號...</p></div>
+                <div id="signals-results"></div>
             </div>
 
             <div id="page-allocator" class="page-view">
@@ -383,14 +643,13 @@
                     <div class="card-header">
                         <div>
                             <h2>💼 智能資金配置</h2>
-                            <p>將根據您的風險偏好和最新市場資訊，為您選中的策略組合建議資金比例。</p>
+                            <p>基於三大要素，為您的策略組合建議資金比例。</p>
                         </div>
                         <span class="help-icon" onclick="showHelpModal('allocator')">?</span>
                     </div>
                     <div class="form-group">
                         <label>已選策略</label>
                         <div id="allocator-strategy-list">
-                            <!-- Selected strategies will be populated here by JS -->
                         </div>
                     </div>
                     <div class="form-group">
@@ -403,21 +662,25 @@
                     </div>
                     <button class="btn" id="start-allocation-btn" onclick="startAllocation()">🚀 開始智能配置</button>
                 </div>
-                <div id="allocation-loading" class="loading" style="display:none;">
-                    <div class="spinner"></div>
-                    <p>🤖 正在分析市場並計算最佳配置...</p>
+                
+                <div id="allocation-loading" class="progress-container" style="display:none;">
+                    <p id="allocation-progress-text">正在初始化分析引擎...</p>
+                    <div class="progress-bar-wrapper">
+                        <div class="progress-bar" id="allocation-progress-bar-inner"></div>
+                    </div>
                 </div>
+
                 <div id="allocation-results">
-                    <!-- Allocation results will be rendered here -->
                 </div>
             </div>
-
         </main>
 
         <nav class="bottom-nav">
             <button class="nav-button active" onclick="showPage('page-trainer')"><span class="nav-button-icon">🧬</span><span>訓練器</span></button>
+            <button class="nav-button" onclick="showPage('page-explorer')"><span class="nav-button-icon">🔭</span><span>策略庫</span></button>
             <button class="nav-button" onclick="showPage('page-backtester')"><span class="nav-button-icon">⚙️</span><span>回測</span></button>
             <button class="nav-button" onclick="showPage('page-strategies')"><span class="nav-button-icon">📖</span><span>我的策略</span></button>
+            <button class="nav-button" onclick="showPage('page-signals')"><span class="nav-button-icon">🎯</span><span>信號</span></button>
             <button class="nav-button" onclick="showPage('page-allocator')"><span class="nav-button-icon">📊</span><span>配置</span></button>
         </nav>
     </div>
@@ -465,6 +728,22 @@
                 </div>
             `
         },
+        explorer: {
+            title: '💡 策略庫功能說明',
+            body: `
+                <div class="help-section">
+                    <h3>功能介紹</h3>
+                    <p>策略庫是您探索和發現已存在的高效策略的地方。您可以查詢資料庫中，針對任一股票已經被訓練和儲存的最佳策略（包含兩種不同風格）。</p>
+                </div>
+                <div class="help-section">
+                    <h3>操作說明</h3>
+                    <p><strong>股票代號:</strong> 輸入您感興趣的股票代號（例如：TSLA, 2330.TW）。</p>
+                    <p><strong>開始查詢:</strong> 點擊按鈕後，系統會立即從後端資料庫中尋找與該股票相關的Rank 1策略。</p>
+                    <p><strong>查詢結果:</strong> 如果找到策略，將會以卡片形式展示其詳細的績效指標。您可以直接點擊「⭐ 加入我的清單」將其保存到您的個人策略中，以便後續進行回測或資金配置。</p>
+                    <p><strong>提示:</strong> 在開始一次全新的、耗時的訓練之前，先來這裡查詢，也許能幫您節省寶貴的時間！</p>
+                </div>
+            `
+        },
         weights: {
             title: '💡 訓練權重設定說明',
             body: `
@@ -498,33 +777,63 @@
             `
         },
         strategies: {
-            title: '💡 我的策略清單功能說明',
+            title: '💡 我的策略清單說明',
+            body: `
+                <div class="help-section">
+                    <h3>功能與操作</h3>
+                    <p>這裡是您所有已儲存策略的管理中心。您可以一目了然地比較各策略的關鍵指標，並進行批次操作。</p>
+                    <ul>
+                        <li><strong>查看詳情:</strong> 點擊卡片任一處可展開或收合，查看包含夏普比率在內的全部績效數據和策略描述。</li>
+                        <li><strong>批次操作:</strong> 使用左側的選框勾選多個策略後，頂部的「資金配置」和「刪除選取」按鈕便會啟用。</li>
+                        <li><strong>單獨操作:</strong> 展開卡片後，可對單一策略進行快速回測或刪除。</li>
+                    </ul>
+                </div>
+                <div class="help-section">
+                    <h3>績效指標詳解</h3>
+                    <ul>
+                        <li><strong>總報酬:</strong> 策略在整個訓練期間的總體盈利或虧損百分比。這是最直觀的獲利能力指標。</li>
+                        <li><strong>勝率:</strong> 獲利交易次數佔總交易次數的比例。高勝率代表策略的穩定性較好。</li>
+                        <li><strong>最大回撤:</strong> 策略資金從最高點回落到最低點的最大幅度。這個數值越低，代表策略的風險控制能力越強，抗風險能力越高。</li>
+                        <li><strong>夏普比率:</strong> 衡量策略每承受一單位風險，能夠帶來多少超額報酬。數值越高，代表策略的風險調整後收益越好，CP值越高。</li>
+                        <li><strong>平均交易報酬:</strong> 每次交易的平均盈虧百分比。高數值代表策略傾向於捕捉較大的單次波動。</li>
+                    </ul>
+                </div>
+            `
+        },
+        signals: {
+            title: '💡 策略最新信號說明',
             body: `
                 <div class="help-section">
                     <h3>功能介紹</h3>
-                    <p>這裡是您所有已儲存策略的管理中心。您可以快速瀏覽每個策略的核心績效指標。</p>
+                    <p>此功能會自動掃描我們資料庫中所有經過訓練和歷史回測的策略，並篩選出在<strong>最近幾個交易日內</strong>出現「買入」或「賣出」信號的股票。</p>
                 </div>
                 <div class="help-section">
-                    <h3>操作說明</h3>
-                    <p><strong>勾選策略:</strong> 使用左側的選框來選擇您感興趣的策略。</p>
-                    <p><strong>進行資金配置:</strong> 勾選完畢後，點擊上方的「進行資金配置」按鈕，系統會將您選中的策略帶到下一個頁面，為您進行資金比例建議。</p>
-                    <p><strong>查看詳情/操作:</strong> 點擊策略卡片可以展開或收合詳細的績效數據和描述。您也可以在這裡快速對單一策略進行回測或刪除。</p>
+                    <h3>如何使用：</h3>
+                    <p>您可以把它當作一個策略的「雷達」。它幫助您從數百個策略中快速發現市場機會，找到那些模型認為處於關鍵交易點位的股票。</p>
+                    <p>點擊卡片右上角的「⭐ 儲存」按鈕，即可將該策略保存到「我的策略」清單中進行後續追蹤或回測。</p>
+                    <p><strong>提醒：</strong> 這裡顯示的信號基於歷史數據回測，僅供參考，並非投資建議。</p>
                 </div>
             `
         },
         allocator: {
-            title: '💡 智能資金配置功能說明',
+            title: '💡 智能資金配置說明',
             body: `
                 <div class="help-section">
                     <h3>功能介紹</h3>
-                    <p>這是本平台的決策輔助功能。系統會綜合分析您選擇的<strong>多個策略的歷史績效(含勝率、總報酬率、最大回撤等)</strong>、您設定的風險偏好、並藉由AI(Gemini)取得<strong>最新的市場即時新聞</strong>，最終產出一個量化的資金分配建議。</p>
+                    <p>這是本平台的<strong>核心決策輔助功能</strong>。它不僅是簡單的數學計算，而是一個綜合分析系統，旨在為您提供一個更全面、更貼近市場現況的資金配置建議。</p>
                 </div>
                 <div class="help-section">
-                    <h3>操作流程</h3>
-                    <p><strong>1. 確認策略:</strong> 檢查上方列出的策略是否為您想配置的組合。</p>
-                    <p><strong>2. 設定風險偏好:</strong> 選擇最符合您投資風格的選項（積極型、均衡型、保守型），這會直接影響系統的決策傾向。</p>
-                    <p><strong>3. 開始配置:</strong> 點擊按鈕後，系統會開始執行網路搜尋與分析，請耐心等候幾秒鐘。</p>
-                    <p><strong>4. 解讀結果:</strong> 最終結果會以清晰的圖表和卡片呈現，包含資金比例及分析理由。</p>
+                    <h3>三大分析引擎</h3>
+                    <p>當您點擊開始配置後，系統會同步啟用三大引擎：</p>
+                    <ul>
+                        <li><strong>① 量化分析引擎:</strong> 深入分析您所選策略的各項歷史績效指標（總報酬、勝率、最大回撤、夏普比率等）。</li>
+                        <li><strong>② 風險偏好引擎:</strong> 根據您選擇的「積極型」、「均衡型」或「保守型」，為不同的績效指標賦予不同的決策權重。</li>
+                        <li><strong>③ AI市場洞察引擎:</strong> 透過 Gemini AI 對您選擇的股票進行即時的Google新聞搜尋與分析，判斷其當前的市場情緒是偏多(Bullish)、中立(Neutral)還是偏空(Bearish)。</li>
+                    </ul>
+                </div>
+                 <div class="help-section">
+                    <h3>決策流程</h3>
+                    <p>最終的配置比例，是將「量化分析」與「風險偏好」計算出的基礎分數，再由「AI市場洞察」的結果進行動態加權調整後得出的。這意味著，一個歷史數據漂亮的策略，如果近期有重大利空消息，其建議的配置比例也可能會被適度調低。</p>
                 </div>
             `
         }
@@ -535,7 +844,7 @@
             const response = await fetch('/api/user/status');
             const result = await response.json();
             if (result.logged_in) {
-                document.getElementById('app-container').style.display = 'block';
+                document.getElementById('app-container').style.display = 'flex';
                 initializeTrainerPage();
             } else {
                 window.location.href = '/login';
@@ -543,7 +852,19 @@
         } catch (error) {
             document.body.innerHTML = '<div style="padding:20px; text-align:center;">無法連接後端，請確認服務已啟動。</div>';
         }
+
+        const chartModal = document.getElementById('chartModal');
+        const chartModalContent = chartModal.querySelector('.chart-modal-content');
+        
         document.getElementById('chartModalClose').addEventListener('click', closeChartModal);
+        
+        chartModal.addEventListener('click', function() {
+            closeChartModal();
+        });
+        
+        chartModalContent.addEventListener('click', function(event) {
+            event.stopPropagation();
+        });
         
         document.getElementById('helpModal').addEventListener('click', function(event) {
             if (event.target === this) {
@@ -588,8 +909,12 @@
         document.getElementById(pageId).classList.add('active');
         document.querySelectorAll('.nav-button').forEach(b => b.classList.remove('active'));
         document.querySelector(`.nav-button[onclick="showPage('${pageId}')"]`).classList.add('active');
+        
         if (pageId === 'page-strategies') {
             loadSavedStrategies();
+        }
+        if (pageId === 'page-signals') {
+            loadStrategySignals();
         }
         if (pageId !== 'page-allocator') {
             document.getElementById('allocation-results').innerHTML = '';
@@ -601,6 +926,15 @@
         if (!container) return;
         const msgType = type === 'error' ? 'error' : 'success';
         container.innerHTML = `<div class="message-box ${msgType}">${message}</div>`;
+    }
+    
+    function formatPercent(num, decimals = 1) {
+        if (num === null || num === undefined || isNaN(num)) return 'N/A';
+        return `${parseFloat(num).toFixed(decimals)}%`;
+    }
+    function formatNumber(num, decimals = 2) {
+        if (num === null || num === undefined || isNaN(num)) return 'N/A';
+        return parseFloat(num).toFixed(decimals);
     }
 
     function validateInput(element) {
@@ -614,9 +948,6 @@
         if (value > max) value = max;
         if (value < min) value = min;
         element.value = value;
-        element.style.transition = 'background-color 0.2s';
-        element.style.backgroundColor = '#e7f3ff';
-        setTimeout(() => { element.style.backgroundColor = '#f9fafb'; }, 300);
     }
 
     function openChartModal(interactiveUrl) {
@@ -636,8 +967,22 @@
         document.body.style.overflow = 'auto';
     }
 
+    // === MODIFIED: Simplified Weight Update functions ===
     function updateWeight(type, value) {
-        document.getElementById(type + '_value').textContent = parseFloat(value).toFixed(2);
+        const floatValue = parseFloat(value);
+        document.getElementById(type + '_input').value = floatValue.toFixed(2);
+        document.getElementById(type + '_weight').value = floatValue;
+        updateTotalWeight();
+    }
+    
+    function updateSlider(type, value) {
+        const floatValue = parseFloat(value);
+        if(isNaN(floatValue) || floatValue < 0) return;
+        if(floatValue > 1) {
+            document.getElementById(type + '_input').value = 1;
+            value = 1;
+        };
+        document.getElementById(type + '_weight').value = value;
         updateTotalWeight();
     }
 
@@ -646,9 +991,17 @@
             .reduce((sum, id) => sum + parseFloat(document.getElementById(id).value), 0);
         const totalElement = document.getElementById('weight_total');
         totalElement.textContent = `權重總和: ${total.toFixed(2)}`;
-        totalElement.style.color = Math.abs(total - 1.0) > 0.01 ? '#e74c3c' : '#27ae60';
+        totalElement.style.color = Math.abs(total - 1.0) > 0.01 ? 'var(--negative-text)' : 'var(--positive-text)';
     }
     
+    function resetTrainingUI() {
+        const btn = document.getElementById('train-btn');
+        const progressContainer = document.getElementById('progress');
+        progressContainer.style.display = 'none';
+        btn.disabled = false;
+        btn.textContent = '🚀 開始訓練';
+    }
+
     async function startTraining() {
         const btn = document.getElementById('train-btn');
         const progressContainer = document.getElementById('progress');
@@ -657,71 +1010,115 @@
         const resultsContainer = document.getElementById('results');
         const ticker = document.getElementById('ticker').value.trim();
 
-        if (!ticker) { showMessage('results', '請輸入股票代號。', 'error'); return; }
+        if (!ticker) { 
+            showMessage('results', '請輸入股票代號。', 'error'); 
+            return; 
+        }
 
         btn.disabled = true;
-        btn.textContent = '🔄 訓練中...';
+        btn.textContent = '🔄 執行中...';
         resultsContainer.innerHTML = '';
         progressContainer.style.display = 'block';
-        progressBar.style.width = '0%';
-        if (progressInterval) clearInterval(progressInterval);
-
-        let currentProgress = 0;
-        const progressMessages = [ "取得歷史數據...", "注入演算法...", "執行回測...", "篩選優勢策略...",  "最終收斂中...", "即將完成..." ];
-        progressText.textContent = progressMessages[0];
-        
-        progressInterval = setInterval(() => {
-            currentProgress += Math.random() * 5;
-            if (currentProgress > 90) {
-                currentProgress = 90;
-                clearInterval(progressInterval);
-            }
-            progressBar.style.width = currentProgress + '%';
-            
-            const messageIndex = Math.floor(currentProgress / (100 / progressMessages.length));
-            progressText.textContent = progressMessages[messageIndex] || "即將完成...";
-
-        }, 400);
+        progressBar.style.transition = 'width 0.5s ease-out';
+        progressBar.style.width = '10%';
+        progressText.textContent = "正在將您的訓練任務加入佇列...";
 
         try {
+            const payload = {
+                ticker,
+                start_date: document.getElementById('start_date').value,
+                end_date: document.getElementById('end_date').value,
+                custom_weights: {
+                    total_return_weight: parseFloat(document.getElementById('total_return_weight').value),
+                    avg_trade_return_weight: parseFloat(document.getElementById('avg_trade_return_weight').value),
+                    win_rate_weight: parseFloat(document.getElementById('win_rate_weight').value),
+                    trade_count_weight: 0,
+                    drawdown_weight: parseFloat(document.getElementById('drawdown_weight').value)
+                },
+                basic_params: {
+                    min_trades: parseInt(document.getElementById('min_trades').value)
+                }
+            };
+
             const response = await fetch('/api/train', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    ticker,
-                    start_date: document.getElementById('start_date').value,
-                    end_date: document.getElementById('end_date').value,
-                    custom_weights: {
-                        total_return_weight: parseFloat(document.getElementById('total_return_weight').value),
-                        avg_trade_return_weight: parseFloat(document.getElementById('avg_trade_return_weight').value),
-                        win_rate_weight: parseFloat(document.getElementById('win_rate_weight').value),
-                        trade_count_weight: 0,
-                        drawdown_weight: parseFloat(document.getElementById('drawdown_weight').value)
-                    },
-                    basic_params: {
-                        min_trades: parseInt(document.getElementById('min_trades').value)
-                    }
-                })
+                body: JSON.stringify(payload)
             });
-            const result = await response.json();
-            if (result.success) {
-                renderTrainingResults(result);
+
+            if (response.status === 202) {
+                const result = await response.json();
+                if (result.success && result.task_id) {
+                    progressBar.style.width = '20%';
+                    progressText.textContent = "✅ 任務已提交！正在等待伺服器分配資源...";
+                    checkTaskStatus(result.task_id);
+                } else {
+                    showMessage('results', `提交任務失敗: ${result.message || '未知錯誤'}`, 'error');
+                    resetTrainingUI();
+                }
             } else {
-                showMessage('results', `訓練失敗: ${result.errors ? result.errors.join(', ') : '未知錯誤'}`, 'error');
+                const errorResult = await response.json();
+                showMessage('results', `提交失敗: ${errorResult.errors ? errorResult.errors.join(', ') : '伺服器錯誤'}`, 'error');
+                resetTrainingUI();
             }
         } catch (error) {
             showMessage('results', `網路錯誤: ${error.message}`, 'error');
-        } finally {
-            clearInterval(progressInterval);
-            progressBar.style.width = '100%';
-            progressText.textContent = "訓練完成！";
-            
-            setTimeout(() => {
-                progressContainer.style.display = 'none';
-                btn.disabled = false;
-                btn.textContent = '🚀 開始訓練';
-            }, 1000);
+            resetTrainingUI();
         }
+    }
+
+    function checkTaskStatus(taskId) {
+        const progressBar = document.getElementById('progress-bar-inner');
+        const progressText = document.getElementById('progress-text');
+
+        const intervalId = setInterval(async () => {
+            try {
+                const response = await fetch(`/api/task_status/${taskId}`);
+                if (!response.ok) {
+                    throw new Error(`伺服器錯誤: ${response.status}`);
+                }
+                const data = await response.json();
+
+                switch (data.status) {
+                    case 'QUEUED':
+                        progressBar.style.width = '30%';
+                        progressText.textContent = "⏳ 任務正在排隊中，請稍候...";
+                        break;
+                    case 'STARTED':
+                        progressBar.style.width = '50%';
+                        progressText.textContent = "🚀已開始為您執行訓練，請稍後...";
+                        break;
+                    case 'SUCCESS':
+                        clearInterval(intervalId);
+                        progressBar.style.width = '100%';
+                        progressText.textContent = "🎉 訓練完成！";
+                        
+                        const trainingResult = data.result;
+                        if (trainingResult && trainingResult.success) {
+                            renderTrainingResults(trainingResult);
+                        } else {
+                            const errorMessage = trainingResult.errors ? trainingResult.errors.join(', ') : '返回的結果格式錯誤';
+                            showMessage('results', `訓練失敗: ${errorMessage}`, 'error');
+                        }
+                        setTimeout(resetTrainingUI, 1500);
+                        break;
+                    case 'FAILURE':
+                        clearInterval(intervalId);
+                        showMessage('results', `訓練任務執行失敗: ${data.result}`, 'error');
+                        resetTrainingUI();
+                        break;
+                    case 'NOT_FOUND':
+                        clearInterval(intervalId);
+                        showMessage('results', '任務ID遺失或無效，請重試。', 'error');
+                        resetTrainingUI();
+                        break;
+                }
+            } catch (error) {
+                clearInterval(intervalId);
+                showMessage('results', '查詢任務狀態時發生網路錯誤。', 'error');
+                resetTrainingUI();
+            }
+        }, 5000);
     }
 
     function renderTrainingResults(result) {
@@ -745,23 +1142,23 @@
             <div class="result-card" data-strategy-json='${JSON.stringify(strategyData)}'>
                 <div class="result-header"><h3>${strategy.strategy_type_name || `策略排名 #${strategy.rank}`}</h3></div>
                 <div class="result-body">
-                    <ul class="data-list">
-                        <li class="data-list-item"><span class="label">總報酬率</span><span class="value positive">${(metrics.total_return * 100).toFixed(2)}%</span></li>
-                        <li class="data-list-item"><span class="label">勝率</span><span class="value positive">${(metrics.win_rate_pct || 0).toFixed(1)}%</span></li>
-                        <li class="data-list-item"><span class="label">平均交易報酬</span><span class="value positive">${(metrics.average_trade_return * 100).toFixed(3)}%</span></li>
-                        <li class="data-list-item"><span class="label">最大回撤</span><span class="value negative">${(metrics.max_drawdown * 100).toFixed(2)}%</span></li>
-                        <li class="data-list-item"><span class="label">交易次數</span><span class="value">${metrics.trade_count || 0}</span></li>
-                        <li class="data-list-item">
-                            <span class="label">最大單次漲/跌</span>
+                    <div class="data-list-grid">
+                        <div class="data-list-item"><span class="label">總報酬率</span><span class="value positive">${(metrics.total_return * 100).toFixed(2)}%</span></div>
+                        <div class="data-list-item"><span class="label">勝率</span><span class="value positive">${(metrics.win_rate_pct || 0).toFixed(1)}%</span></div>
+                        <div class="data-list-item"><span class="label">平均交易報酬</span><span class="value positive">${(metrics.average_trade_return * 100).toFixed(3)}%</span></div>
+                        <div class="data-list-item"><span class="label">最大回撤</span><span class="value negative">${(metrics.max_drawdown * 100).toFixed(2)}%</span></div>
+                        <div class="data-list-item"><span class="label">夏普比率</span><span class="value">${(metrics.sharpe_ratio || 0).toFixed(2)}</span></div>
+                        <div class="data-list-item"><span class="label">交易次數</span><span class="value">${metrics.trade_count || 0}</span></div>
+                        <div class="data-list-item" style="grid-column: 1 / -1;"><span class="label">最大單筆獲利/虧損</span>
                             <span class="value">
                                 <span class="positive">${(metrics.max_trade_gain_pct || 0).toFixed(2)}%</span> / <span class="negative">${(metrics.max_trade_drop_pct || 0).toFixed(2)}%</span>
                             </span>
-                        </li>
-                    </ul>
+                        </div>
+                    </div>
                     ${chartHtml}
                     <div class="description">${strategy.description}</div>
                     <div style="margin-top:16px; display:flex; gap:8px;">
-                        <button style="flex:1;" class="save-btn" onclick='saveStrategy(this)'>⭐ 儲存策略</button>
+                        <button style="flex:1;" class="btn" onclick='saveStrategy(this)'>⭐ 儲存策略</button>
                     </div>
                 </div>
             </div>`;
@@ -828,19 +1225,20 @@
             ${hintHtml}
             <div class="result-card">
                 <div class="result-body">
-                    <ul class="data-list">
-                       <li class="data-list-item"><span class="label">總報酬率</span><span class="value positive">${(metrics.total_return * 100).toFixed(2)}%</span></li>
-                       <li class="data-list-item"><span class="label">勝率</span><span class="value positive">${(metrics.win_rate_pct || 0).toFixed(1)}%</span></li>
-                       <li class="data-list-item"><span class="label">平均交易報酬</span><span class="value positive">${(metrics.average_trade_return * 100).toFixed(3)}%</span></li>
-                       <li class="data-list-item"><span class="label">最大回撤</span><span class="value negative">${(metrics.max_drawdown * 100 || 0).toFixed(2)}%</span></li>
-                       <li class="data-list-item"><span class="label">交易次數</span><span class="value">${metrics.trade_count || 0}</span></li>
-                       <li class="data-list-item">
-                           <span class="label">最大單次漲/跌</span>
+                    <div class="data-list-grid">
+                       <div class="data-list-item"><span class="label">總報酬率</span><span class="value positive">${(metrics.total_return * 100).toFixed(2)}%</span></div>
+                       <div class="data-list-item"><span class="label">勝率</span><span class="value positive">${(metrics.win_rate_pct || 0).toFixed(1)}%</span></div>
+                       <div class="data-list-item"><span class="label">平均交易報酬</span><span class="value positive">${(metrics.average_trade_return * 100).toFixed(3)}%</span></div>
+                       <div class="data-list-item"><span class="label">最大回撤</span><span class="value negative">${(metrics.max_drawdown * 100 || 0).toFixed(2)}%</span></div>
+                       <div class="data-list-item"><span class="label">夏普比率</span><span class="value">${(metrics.sharpe_ratio || 0).toFixed(2)}</span></div>
+                       <div class="data-list-item"><span class="label">交易次數</span><span class="value">${metrics.trade_count || 0}</span></div>
+                       <div class="data-list-item" style="grid-column: 1 / -1;">
+                           <span class="label">最大單筆獲利/虧損</span>
                            <span class="value">
                                <span class="positive">${(metrics.max_trade_gain_pct * 1 || 0).toFixed(2)}%</span> / <span class="negative">${(metrics.max_trade_drop_pct * 1 || 0).toFixed(2)}%</span>
                            </span>
-                       </li>
-                    </ul>
+                       </div>
+                    </div>
                     ${chartHtml}
                 </div>
             </div>`;
@@ -871,6 +1269,30 @@
         }
     }
     
+    async function saveStrategyFromSignalCard(button, strategyData) {
+        button.disabled = true;
+        button.textContent = '儲存中...';
+        try {
+            const response = await fetch('/api/strategies', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(strategyData)
+            });
+            const result = await response.json();
+            if (result.success) {
+                button.textContent = '✅ 已儲存';
+            } else {
+                alert('儲存失敗: ' + (result.message || '未知錯誤'));
+                button.textContent = '⭐ 儲存';
+                button.disabled = false;
+            }
+        } catch (error) {
+            alert('儲存請求失敗，請檢查網路連線。');
+            button.textContent = '⭐ 儲存';
+            button.disabled = false;
+        }
+    }
+    
     async function loadSavedStrategies() {
         if (isLoadingStrategies) return;
         isLoadingStrategies = true;
@@ -878,7 +1300,7 @@
         const statusDiv = document.getElementById('strategy-list-status');
         container.innerHTML = '';
         statusDiv.innerHTML = '<div class="loading" style="display:block;"><div class="spinner"></div><p>正在載入您的策略...</p></div>';
-        updateAllocatorButtonState();
+        updateBatchActionButtonsState();
 
         try {
             const response = await fetch('/api/strategies');
@@ -898,26 +1320,18 @@
         }
     }
 
+    // === MODIFIED: renderStrategyList reverted to original simpler layout ===
     function renderStrategyList(strategies) {
         const container = document.getElementById('strategy-list-container');
         const cardsHtml = strategies.map(s => {
             const totalReturn = parseFloat(s.total_return);
             const avgTradeReturn = parseFloat(s.avg_trade_return);
             const geneString = JSON.stringify(s.gene);
-            const strategyDataAttr = `
-                data-id="${s.id}"
-                data-ticker="${s.ticker || 'N/A'}"
-                data-total-return="${(totalReturn * 100).toFixed(2)}"
-                data-avg-trade-return="${(avgTradeReturn * 100).toFixed(3)}"
-                data-win-rate="${parseFloat(s.win_rate).toFixed(1)}"
-                data-max-drawdown="${(parseFloat(s.max_drawdown) * 100).toFixed(2)}"
-                data-max-trade-extremes="${s.max_trade_extremes || 'N/A'}"
-            `;
 
             return `
-            <div class="strategy-list-card" id="strategy-row-${s.id}" ${strategyDataAttr}>
+            <div class="strategy-list-card" id="strategy-row-${s.id}" data-id="${s.id}" data-ticker="${s.ticker || 'N/A'}">
                 <div class="strategy-list-header">
-                    <input type="checkbox" class="strategy-select-checkbox" onchange="updateAllocatorButtonState()">
+                    <input type="checkbox" class="strategy-select-checkbox" onchange="updateBatchActionButtonsState()">
                     <div class="strategy-list-header-info" onclick="toggleStrategyCard(this.parentElement)">
                         <h3>${s.ticker || 'N/A'}</h3>
                         <p>訓練期間: ${s.train_start_date || 'N/A'} ~ ${s.train_end_date || 'N/A'}</p>
@@ -930,9 +1344,10 @@
                             <li class="data-list-item"><span class="label">總報酬</span><span class="value ${totalReturn > 0 ? 'positive' : 'negative'}">${(totalReturn * 100).toFixed(2)}%</span></li>
                             <li class="data-list-item"><span class="label">平均交易報酬</span><span class="value ${avgTradeReturn > 0 ? 'positive' : 'negative'}">${(avgTradeReturn * 100).toFixed(3)}%</span></li>
                             <li class="data-list-item"><span class="label">勝率</span><span class="value">${parseFloat(s.win_rate).toFixed(1)}%</span></li>
-                            <li class="data-list-item"><span class="label">交易數</span><span class="value">${s.trade_count}</span></li>
                             <li class="data-list-item"><span class="label">最大回撤</span><span class="value negative">${(parseFloat(s.max_drawdown) * 100).toFixed(2)}%</span></li>
-                            <li class="data-list-item"><span class="label">最大單次漲/跌</span><span class="value">${s.max_trade_extremes || 'N/A'}</span></li>
+                            <li class="data-list-item"><span class="label">夏普比率</span><span class="value">${parseFloat(s.sharpe_ratio || 0).toFixed(2)}</span></li>
+                            <li class="data-list-item"><span class="label">交易數</span><span class="value">${s.trade_count}</span></li>
+                            <li class="data-list-item"><span class="label">最大單筆獲利/虧損</span><span class="value">${s.max_trade_extremes || 'N/A'}</span></li>
                         </ul>
                         <div class="description">${s.strategy_details || '無詳細描述'}</div>
                     </div>
@@ -970,9 +1385,13 @@
             if (response.ok) {
                 const row = document.getElementById(`strategy-row-${strategyId}`);
                 if (row) {
-                    row.style.transition = 'opacity 0.5s ease';
+                    row.style.transition = 'opacity 0.5s ease, transform 0.5s ease';
                     row.style.opacity = '0';
-                    setTimeout(() => row.remove(), 500);
+                    row.style.transform = 'translateX(-20px)';
+                    setTimeout(() => {
+                        row.remove();
+                        updateBatchActionButtonsState();
+                    }, 500);
                 }
             } else {
                 const result = await response.json();
@@ -983,14 +1402,54 @@
         }
     }
 
-    function updateAllocatorButtonState() {
+    function updateBatchActionButtonsState() {
         const checkboxes = document.querySelectorAll('#strategy-list-container .strategy-select-checkbox:checked');
         const count = checkboxes.length;
-        const btn = document.getElementById('proceed-allocator-btn');
+        
+        const allocatorBtn = document.getElementById('proceed-allocator-btn');
+        const deleteBtn = document.getElementById('batch-delete-btn');
         const countSpan = document.getElementById('selected-strategy-count');
         
         countSpan.textContent = count;
-        btn.disabled = count === 0;
+        allocatorBtn.disabled = count === 0;
+        deleteBtn.disabled = count === 0;
+    }
+
+    // === BATCH DELETE FUNCTION (WITH FIX) ===
+    async function batchDeleteStrategies() {
+        const checkboxes = document.querySelectorAll('#strategy-list-container .strategy-select-checkbox:checked');
+        const count = checkboxes.length;
+        if (count === 0) return;
+
+        if (!confirm(`您確定要刪除這 ${count} 個選取的策略嗎？此操作無法復原。`)) {
+            return;
+        }
+
+        const strategyIds = Array.from(checkboxes).map(cb => parseInt(cb.closest('.strategy-list-card').dataset.id, 10));
+
+        try {
+            const response = await fetch('/api/strategies/batch-delete', {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ strategy_ids: strategyIds })
+            });
+
+            if (response.ok) {
+                strategyIds.forEach(id => {
+                    const row = document.getElementById(`strategy-row-${id}`);
+                    if (row) row.remove();
+                });
+                updateBatchActionButtonsState();
+                if (document.querySelectorAll('#strategy-list-container .strategy-list-card').length === 0) {
+                     document.getElementById('strategy-list-status').innerHTML = '<p class="message-box hint-bar">您的清單中沒有任何策略。</p>';
+                }
+            } else {
+                const result = await response.json();
+                alert(`批次刪除失敗: ${result.message}`);
+            }
+        } catch (error) {
+            alert(`批次刪除時發生網路錯誤: ${error.message}`);
+        }
     }
 
     function proceedToAllocator() {
@@ -1017,7 +1476,7 @@
 
         if (duplicatesFound) {
             alert('已為您自動取消重複選擇的同支股票策略。系統會以第一個選中的為準。');
-            updateAllocatorButtonState();
+            updateBatchActionButtonsState();
         }
         
         if(selectedStrategiesForAllocation.length > 0) {
@@ -1056,13 +1515,15 @@
         }
 
         populateAllocatorPage();
-        updateAllocatorButtonState();
+        updateBatchActionButtonsState();
         document.getElementById('allocation-results').innerHTML = '';
     }
 
-    async function startAllocation() {
+     async function startAllocation() {
         const btn = document.getElementById('start-allocation-btn');
-        const loadingDiv = document.getElementById('allocation-loading');
+        const progressContainer = document.getElementById('allocation-loading');
+        const progressBar = document.getElementById('allocation-progress-bar-inner');
+        const progressText = document.getElementById('allocation-progress-text');
         const resultsDiv = document.getElementById('allocation-results');
         
         if (selectedStrategiesForAllocation.length === 0) {
@@ -1075,8 +1536,33 @@
 
         btn.disabled = true;
         btn.textContent = '🔄 計算中...';
-        loadingDiv.style.display = 'block';
+        progressContainer.style.display = 'block';
         resultsDiv.innerHTML = '';
+
+        progressBar.style.transition = 'none';
+        progressBar.style.width = '0%';
+        progressBar.offsetHeight;
+        progressBar.style.transition = 'width 16s cubic-bezier(0.25, 0.1, 0.25, 1)';
+        progressBar.style.width = '90%';
+
+        const progressMessages = ["分析策略歷史績效...", "AI 正在獲取市場新聞...", "評估風險偏好...", "計算最佳資金權重..."];
+        let messageIndex = 0;
+        progressText.textContent = progressMessages[messageIndex];
+
+        if (progressInterval) clearInterval(progressInterval);
+        progressInterval = setInterval(() => {
+            if (messageIndex < progressMessages.length - 1) {
+                messageIndex++;
+                progressText.textContent = progressMessages[messageIndex];
+            } else {
+                clearInterval(progressInterval);
+            }
+        }, 1800);
+
+        setTimeout(() => {
+            clearInterval(progressInterval);
+            progressText.textContent = "即將完成...";
+        }, 7500);
 
         try {
             const response = await fetch('/api/capital-allocation', {
@@ -1084,6 +1570,9 @@
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ strategy_ids: strategyIds, risk_profile: riskProfile })
             });
+
+            progressBar.style.transition = 'width 0.5s ease-out';
+            progressBar.style.width = '95%';
 
             if (!response.ok) {
                 const errorData = await response.json();
@@ -1100,90 +1589,285 @@
         } catch (error) {
             showMessage('allocation-results', `網路錯誤: ${error.message}`, 'error');
         } finally {
-            btn.disabled = false;
-            btn.textContent = '🚀 開始智能配置';
-            loadingDiv.style.display = 'none';
+            clearInterval(progressInterval);
+
+            progressBar.style.transition = 'width 0.4s ease-out';
+            progressBar.style.width = '100%';
+            progressText.textContent = "配置完成！";
+
+            setTimeout(() => {
+                progressContainer.style.display = 'none';
+                btn.disabled = false;
+                btn.textContent = '🚀 開始智能配置';
+            }, 1000);
         }
     }
     
+    const roleDetailsMap = {
+        '核心增長': { icon: '🚀', cssClass: 'role-growth', color: '#22c55e' },
+        '穩定基石': { icon: '🛡️', cssClass: 'role-stable', color: '#3b82f6' },
+        '衛星配置': { icon: '🛰️', cssClass: 'role-satellite', color: '#f59e0b' },
+        '未知角色': { icon: '💼', cssClass: 'role-stable', color: '#a0aec0' }
+    };
+
     function renderAllocationResults(data) {
         const resultsDiv = document.getElementById('allocation-results');
-        const reasoning = data.reasoning;
         
-        function getRoleDetails(role) {
-            if (role.includes('核心')) {
-                return { icon: '🚀', cssClass: 'role-growth' };
-            } else if (role.includes('衛星')) {
-                return { icon: '🛰️', cssClass: 'role-satellite' };
-            } else if (role.includes('穩定')) {
-                return { icon: '🛡️', cssClass: 'role-stable' };
-            }
-            return { icon: '💼', cssClass: 'role-stable' };
+        if (!data || !data.allocations || data.allocations.length === 0) {
+            resultsDiv.innerHTML = '<p class="message-box error">無法生成配置建議，請稍後再試。</p>';
+            return;
         }
 
-        let allocationCardsHtml = reasoning.per_stock_analysis.map(stock => {
-            const allocationData = data.allocations.find(a => a.ticker === stock.ticker);
-            if (!allocationData) return '';
+        const allocations = data.allocations;
+        const reasoning = data.reasoning;
+        const overallSummary = reasoning.overall_summary;
+        const perStockAnalysis = reasoning.per_stock_analysis;
 
-            const percentage = allocationData.percentage;
-            const roleDetails = getRoleDetails(stock.role_in_portfolio);
+        const summaryHtml = `
+            <div class="message-box hint-bar" style="margin-bottom: 20px;">
+                <h4 style="margin-bottom:8px; color: #90cdf4;">💡 整體策略總結</h4>
+                <p style="font-size: 0.95rem; line-height: 1.7; color: var(--text-secondary);">${overallSummary}</p>
+            </div>
+        `;
+        
+        const allocationCardsHtml = allocations.map(alloc => {
+            const percentage = alloc.percentage;
+            const ticker = alloc.ticker;
+            const analysis = perStockAnalysis.find(a => a.ticker === ticker) || {};
+            const roleName = analysis.role_in_portfolio || '未知角色';
+            const roleStyle = roleDetailsMap[roleName] || roleDetailsMap['未知角色'];
+            const justification = analysis.justification || "無詳細分析。";
 
             return `
-            <div class="allocation-item-card" style="border-color: var(--${roleDetails.cssClass.replace('role-', '')}-color, var(--primary-color));">
+            <div class="allocation-item-card" style="border-left-color: ${roleStyle.color};">
                 <div class="allocation-item-header">
                     <div>
-                        <div class="ticker">${stock.ticker}</div>
-                        <div class="allocation-role ${roleDetails.cssClass}">
-                           ${roleDetails.icon} <span>${stock.role_in_portfolio}</span>
+                        <div class="ticker">${ticker}</div>
+                        <div class="allocation-role ${roleStyle.cssClass}">
+                           ${roleStyle.icon} <span>${roleName}</span>
                         </div>
                     </div>
                     <div class="percentage">${percentage}%</div>
                 </div>
                 <div class="allocator-result-bar-container">
-                    <div class="allocator-result-bar" style="width: 0;"></div>
+                    <div class="allocator-result-bar" data-percentage="${percentage}" style="width: 0;"></div>
                 </div>
-                <p class="allocation-justification">${stock.justification}</p>
+                <p class="allocation-justification">${justification}</p>
             </div>
             `;
         }).join('');
 
-        const html = `
+        const finalHtml = `
             <div class="result-card">
                 <div class="result-header"><h3>📊 資金配置建議</h3></div>
                 <div class="result-body">
-                    <div class="card" style="margin-bottom: 20px; background-color: #e7f3ff;">
-                         <div class="card-header" style="margin-bottom:10px;">
-                            <div><h2 style="font-size: 1rem;">💡 整體策略總結</h2></div>
-                         </div>
-                        <p style="font-size: 0.95rem; line-height: 1.7; color: #2980b9;">${reasoning.overall_summary}</p>
-                    </div>
+                    ${summaryHtml}
                     <div class="allocation-grid">
                         ${allocationCardsHtml}
                     </div>
                 </div>
             </div>
         `;
-        resultsDiv.innerHTML = html;
+        
+        resultsDiv.innerHTML = finalHtml;
 
-        // Animate the progress bars
         setTimeout(() => {
-            document.querySelectorAll('.allocator-result-bar').forEach((bar, index) => {
-                const stock = reasoning.per_stock_analysis[index];
-                const allocationData = data.allocations.find(a => a.ticker === stock.ticker);
-                if(allocationData) {
-                    bar.style.width = `${allocationData.percentage}%`;
-                }
+            document.querySelectorAll('.allocator-result-bar').forEach(bar => {
+                const targetWidth = bar.dataset.percentage;
+                bar.style.width = `${targetWidth}%`;
             });
-        }, 100); // Small delay to ensure rendering before animation
+        }, 100);
+    }
+    
+    async function lookupStrategy() {
+        const btn = document.getElementById('lookup-btn');
+        const ticker = document.getElementById('lookup-ticker').value.trim();
+        const resultsContainer = document.getElementById('lookup-results-container');
 
-        const styleSheet = document.styleSheets[0];
+        if (!ticker) {
+            resultsContainer.innerHTML = `<div class="message-box error">請輸入股票代號。</div>`;
+            return;
+        }
+
+        btn.disabled = true;
+        btn.innerHTML = `<div class="spinner" style="width:20px; height:20px; border-width:3px; margin: 0 auto;"></div>`;
+        resultsContainer.innerHTML = `<div class="loading" style="display:block;"><p>正在查詢資料庫...</p></div>`;
+
         try {
-            if (!document.documentElement.style.getPropertyValue('--growth-color')) {
-                 styleSheet.insertRule(':root { --growth-color: #22c55e; }', styleSheet.cssRules.length);
-                 styleSheet.insertRule(':root { --satellite-color: #f59e0b; }', styleSheet.cssRules.length);
-                 styleSheet.insertRule(':root { --stable-color: #3b82f6; }', styleSheet.cssRules.length);
+            const response = await fetch(`/api/lookup-strategy?ticker=${encodeURIComponent(ticker)}`);
+            const result = await response.json();
+
+            if (result.success) {
+                if (result.found) {
+                    renderLookupResults(result.strategies);
+                } else {
+                    resultsContainer.innerHTML = `<div class="message-box hint-bar">${result.message}</div>`;
+                }
+            } else {
+                resultsContainer.innerHTML = `<div class="message-box error">${result.message}</div>`;
             }
-        } catch(e) { console.warn("Could not insert CSS rules, they might already exist.", e); }
+        } catch (error) {
+            resultsContainer.innerHTML = `<div class="message-box error">查詢時發生網路錯誤: ${error.message}</div>`;
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = '🔍 開始查詢';
+        }
+    }
+
+    function renderLookupResults(strategies) {
+        const resultsContainer = document.getElementById('lookup-results-container');
+        let html = '';
+
+        strategies.forEach(strategy => {
+            const metrics = strategy.metrics;
+            const strategyData = strategy; 
+            
+            html += `
+            <div class="result-card" data-strategy-json='${JSON.stringify(strategyData)}'>
+                <div class="result-header">
+                    <h3>${strategy.strategy_type_name}</h3>
+                    <div style="font-size:0.8rem; color: var(--text-secondary);">訓練期間: ${strategy.train_start_date} ~ ${strategy.train_end_date}</div>
+                </div>
+                <div class="result-body">
+                    <div class="data-list-grid">
+                        <div class="data-list-item"><span class="label">總報酬率</span><span class="value positive">${(metrics.total_return * 100).toFixed(2)}%</span></div>
+                        <div class="data-list-item"><span class="label">勝率</span><span class="value positive">${(metrics.win_rate_pct || 0).toFixed(1)}%</span></div>
+                        <div class="data-list-item"><span class="label">平均交易報酬</span><span class="value positive">${(metrics.average_trade_return * 100).toFixed(3)}%</span></div>
+                        <div class="data-list-item"><span class="label">最大回撤</span><span class="value negative">${(metrics.max_drawdown * 100).toFixed(2)}%</span></div>
+                        <div class="data-list-item"><span class="label">夏普比率</span><span class="value">${(metrics.sharpe_ratio || 0).toFixed(2)}</span></div>
+                        <div class="data-list-item"><span class="label">交易次數</span><span class="value">${metrics.trade_count || 0}</span></div>
+                        <div class="data-list-item" style="grid-column: 1 / -1;">
+                            <span class="label">最大單筆獲利/虧損</span>
+                            <span class="value">
+                                <span class="positive">${(metrics.max_trade_gain_pct || 0).toFixed(2)}%</span> / <span class="negative">${(metrics.max_trade_drop_pct || 0).toFixed(2)}%</span>
+                            </span>
+                        </div>
+                    </div>
+                    <div class="description">${strategy.strategy_details}</div>
+                    <div style="margin-top:16px;">
+                        <button class="btn" onclick='saveStrategyFromLookup(this)'>⭐ 加入我的清單</button>
+                    </div>
+                </div>
+            </div>`;
+        });
+        resultsContainer.innerHTML = html;
+    }
+
+    async function saveStrategyFromLookup(button) {
+        const card = button.closest('.result-card');
+        const strategyData = JSON.parse(card.dataset.strategyJson);
+        button.textContent = '儲存中...';
+        button.disabled = true;
+        try {
+            const response = await fetch('/api/strategies', {
+                method: 'POST', 
+                headers: {'Content-Type': 'application/json'}, 
+                body: JSON.stringify(strategyData)
+            });
+            if(response.ok) {
+                button.textContent = '✅ 已加入清單';
+            } else {
+                const result = await response.json();
+                alert(`加入失敗: ${result.message}`);
+                button.textContent = '⭐ 加入我的清單';
+                button.disabled = false;
+            }
+        } catch (err) {
+            alert(`網路錯誤: ${err}`);
+            button.textContent = '⭐ 加入我的清單';
+            button.disabled = false;
+        }
+    }
+
+    async function loadStrategySignals() {
+        const market = document.getElementById('market-select').value;
+        const signalType = document.querySelector('input[name="signal_type"]:checked').value;
+        const loadingDiv = document.getElementById('signals-loading');
+        const resultsDiv = document.getElementById('signals-results');
+
+        loadingDiv.style.display = 'block';
+        resultsDiv.innerHTML = '';
+
+        try {
+            const response = await fetch(`/api/strategy-signals?market=${market}&type=${signalType}`);
+            const result = await response.json();
+            if (result.success) {
+                displayStrategySignals(result.data);
+            } else {
+                showMessage('signals-results', result.message || '策略信號搜尋失敗', 'error');
+            }
+        } catch (error) {
+            showMessage('signals-results', '網路連接錯誤，請稍後再試', 'error');
+        } finally {
+            loadingDiv.style.display = 'none';
+        }
+    }
+
+    function displayStrategySignals(data) {
+        const container = document.getElementById('signals-results');
+        if (!data || data.length === 0) {
+            container.innerHTML = `<div class="message-box hint-bar">🎯 目前沒有符合條件的策略信號</div>`;
+            return;
+        }
+        let html = '<div id="signals-grid">';
+        data.forEach(signal => {
+            const metrics = {
+                win_rate_pct: signal.win_rate,
+                total_return: signal.return_pct / 100,
+                trade_count: signal.total_trades,
+                average_trade_return: signal.average_trade_return_pct / 100,
+                max_drawdown: signal.max_drawdown_pct / 100,
+                sharpe_ratio: signal.sharpe_ratio || 0.0,
+                max_trade_drop_pct: signal.max_trade_drop_pct,
+                max_trade_gain_pct: signal.max_trade_gain_pct,
+            };
+
+            let parsedGene = [];
+            try {
+                if (signal.ai_strategy_gene) {
+                    parsedGene = JSON.parse(signal.ai_strategy_gene);
+                }
+            } catch(e) {
+                console.error('解析信號策略基因失敗:', signal.ai_strategy_gene, e);
+            }
+
+            const payload = {
+                ticker: signal.stock_ticker,
+                train_start_date: signal.game_start_date,
+                train_end_date: signal.game_end_date,
+                gene: parsedGene,
+                strategy_details: signal.strategy_details,
+                metrics: metrics
+            };
+
+            const returnColorClass = parseFloat(signal.return_pct) >= 0 ? 'positive' : 'negative';
+            const avgReturnColorClass = parseFloat(signal.average_trade_return_pct) >= 0 ? 'positive' : 'negative';
+            
+            let price_html = '';
+            if (signal.buy_price !== null) price_html += `<div class="signal-price signal-buy">買入價格: ${formatNumber(signal.buy_price)}</div>`;
+            if (signal.sell_price !== null) price_html += `<div class="signal-price signal-sell">賣出價格: ${formatNumber(signal.sell_price)}</div>`;
+            const cleanReason = signal.signal_reason.replace(/🟢|🔴|買入:|賣出:/g, '').trim();
+
+            html += `
+            <div class="signal-card">
+                <div class="signal-card-header">
+                    <div class="ticker">${signal.stock_ticker}</div>
+                    <button class="btn" style="padding: 6px 14px; font-size: 0.8rem; width: auto;" onclick='saveStrategyFromSignalCard(this, ${JSON.stringify(payload)})'>⭐ 儲存</button>
+                </div>
+                <div class="signal-card-body">
+                    <p>${cleanReason}</p>
+                    ${price_html}
+                </div>
+                <div class="signal-card-footer">
+                    <span>績效: <span class="value ${returnColorClass}">${formatPercent(signal.return_pct)}</span></span>
+                    <span>平均報酬: <span class="value ${avgReturnColorClass}">${formatPercent(signal.average_trade_return_pct, 2)}</span></span>
+                    <span>勝率: <span class="value">${formatPercent(signal.win_rate)}</span></span>
+                    
+                </div>
+            </div>`;
+        });
+        html += '</div>';
+        container.innerHTML = html;
     }
 </script>
 </body>
