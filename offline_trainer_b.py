@@ -74,12 +74,12 @@ class TrainingConfig_B:
     
     # 🎯 核心訓練設定
     ENABLE_NSGA2 = True  # True=多目標優化, False=傳統GA
-    NUM_GA_RUNS_PER_STOCK = 40  # 每支股票運行幾次GA (建議30-80)
-    TOP_N_STRATEGIES_TO_SAVE = 3  # 保存最佳N個策略
+    NUM_GA_RUNS_PER_STOCK = 50  # 每支股票運行幾次GA (建議30-80)
+    TOP_N_STRATEGIES_TO_SAVE = 1  # 保存最佳N個策略
     
     # 📅 訓練時間範圍
-    TRAIN_START_DATE = "2022-07-01"  # 訓練開始日期
-    TRAIN_END_DATE = "2025-07-01"    # 訓練結束日期
+    TRAIN_START_DATE = "2022-08-01"  # 訓練開始日期
+    TRAIN_END_DATE = "2025-08-01"    # 訓練結束日期
 
     # 🏠 資料庫設定
     SYSTEM_AI_USER_ID = 3  # 系統B用戶ID (與系統A區分)
@@ -92,7 +92,7 @@ class TrainingConfig_B:
     # 📈 NSGA-II 專用配置 (系統B)
     NSGA2_CONFIG = {
         'nsga2_selection_method': 'custom_balance',  # 🔧 可選方法：
-        'min_required_trades': 5,      # 最少交易次數要求
+        'min_required_trades': 4,      # 最少交易次數要求
         'generations': 5,             # NSGA-II 迭代次數
         'population_size': 60,         # NSGA-II 種群大小
         'show_process': False,         # 是否顯示詳細過程
@@ -101,9 +101,9 @@ class TrainingConfig_B:
         'custom_weights': {
             'total_return_weight': 0.35,      # 總報酬率權重
             'avg_trade_return_weight': 0.30,  # 平均交易報酬率權重 
-            'win_rate_weight': 0.25,          # 勝率權重
-            'trade_count_weight': 0.05,       # 交易次數權重
-            'drawdown_weight': 0.05           # 回撤懲罰權重
+            'win_rate_weight': 0.20,          # 勝率權重
+            'trade_count_weight': 0,       # 交易次數權重
+            'drawdown_weight': 0.15           # 回撤懲罰權重
         },
         
         # 🔥 激進模式設定 (僅在 aggressive 模式下有效)
@@ -137,6 +137,7 @@ class TrainingConfig_B:
         'SP100': False,   # 訓練S&P100
     }
 
+    RISK_FREE_RATE = 0.02
 # ═══════════════════════════════════════════════════════════════
 # 🛠️ 資料庫連接設定
 # ═══════════════════════════════════════════════════════════════
@@ -165,129 +166,67 @@ def get_db_connection():
         logger.error(f"❌ 資料庫連接錯誤: {e}")
         return None
 
-# ═══════════════════════════════════════════════════════════════
-# 🆕 單次交易最大跌幅/漲幅計算函數 (系統B)
-# ═══════════════════════════════════════════════════════════════
-
-def calc_trade_extremes_b(prices, dates, buy_signals, sell_signals):
-    """
-    計算單次交易內部的最大跌幅和最大漲幅（以股價為基準）- 系統B版本
-    """
-    if not buy_signals or not sell_signals:
-        return 0.0, 0.0
-    
-    date2idx = {d: i for i, d in enumerate(dates)}
-    worst_drop = 0.0
-    best_gain = 0.0
-    
-    completed_trades = min(len(buy_signals), len(sell_signals))
-    
-    for i in range(completed_trades):
-        try:
-            buy_date, buy_price, _ = buy_signals[i]
-            sell_date, sell_price, _ = sell_signals[i]
-            
-            if buy_date not in date2idx or sell_date not in date2idx:
-                continue
-                
-            buy_idx = date2idx[buy_date]
-            sell_idx = date2idx[sell_date]
-            
-            if buy_idx >= sell_idx:
-                continue
-            
-            trade_period_prices = prices[buy_idx:sell_idx + 1]
-            
-            if len(trade_period_prices) == 0:
-                continue
-                
-            min_price = min(trade_period_prices)
-            max_price = max(trade_period_prices)
-            
-            drop_pct = (min_price - buy_price) / buy_price
-            gain_pct = (max_price - buy_price) / buy_price
-            
-            worst_drop = min(worst_drop, drop_pct)
-            best_gain = max(best_gain, gain_pct)
-            
-        except (IndexError, TypeError, ZeroDivisionError):
-            continue
-    
-    return worst_drop * 100, best_gain * 100
 
 # ═══════════════════════════════════════════════════════════════
 # 📊 績效計算輔助函數 (系統B專用)
 # ═══════════════════════════════════════════════════════════════
 
 def calculate_detailed_metrics_for_traditional_ga_b(gene_result, prices, dates, precalculated, ga_params):
-    """為系統B傳統 GA 計算詳細的績效指標（包含交易極值）"""
-    try:
-        rsi_buy_entry, rsi_exit, vix_threshold = gene_result[0:3]
-        low_vol_exit_strategy, rsi_period_choice, vix_ma_choice = gene_result[3:6]
-        bb_length_choice, bb_std_choice, adx_threshold, high_vol_entry_choice = gene_result[6:10]
-        
-        rsi_period = ga_params['rsi_period_options'][rsi_period_choice]
-        vix_ma_period = ga_params['vix_ma_period_options'][vix_ma_choice]
-        bb_length = ga_params['bb_length_options'][bb_length_choice]
-        bb_std = ga_params['bb_std_options'][bb_std_choice]
-        
-        rsi_list = precalculated['rsi'][rsi_period]
-        vix_ma_list = precalculated['vix_ma'][vix_ma_period]
-        bbl_list = precalculated['bbl'][(bb_length, bb_std)]
-        bbm_list = precalculated['bbm'][(bb_length, bb_std)]
-        adx_list = precalculated['fixed']['adx_list']
-        ma_short_list = precalculated['fixed']['ma_short_list']
-        ma_long_list = precalculated['fixed']['ma_long_list']
+        """為系統B傳統 GA 計算詳細的績效指標（v5.2 - 改為調用 utils 標準函數）"""
+        try:
+            # --- 這部分不變，仍然需要運行策略來獲取原始數據 ---
+            rsi_buy_entry, rsi_exit, vix_threshold = gene_result[0:3]
+            low_vol_exit_strategy, rsi_period_choice, vix_ma_choice = gene_result[3:6]
+            bb_length_choice, bb_std_choice, adx_threshold, high_vol_entry_choice = gene_result[6:10]
+            
+            rsi_period = ga_params['rsi_period_options'][rsi_period_choice]
+            vix_ma_period = ga_params['vix_ma_period_options'][vix_ma_choice]
+            bb_length = ga_params['bb_length_options'][bb_length_choice]
+            bb_std = ga_params['bb_std_options'][bb_std_choice]
+            
+            rsi_list = precalculated['rsi'][rsi_period]
+            vix_ma_list = precalculated['vix_ma'][vix_ma_period]
+            bbl_list = precalculated['bbl'][(bb_length, bb_std)]
+            bbm_list = precalculated['bbm'][(bb_length, bb_std)]
+            adx_list = precalculated['fixed']['adx_list']
+            ma_short_list = precalculated['fixed']['ma_short_list']
+            ma_long_list = precalculated['fixed']['ma_long_list']
 
-        portfolio_values, buy_signals, sell_signals = run_strategy_b(
-            rsi_buy_entry, rsi_exit, adx_threshold, vix_threshold,
-            low_vol_exit_strategy, high_vol_entry_choice,
-            ga_params['commission_rate'], prices, dates,
-            rsi_list, bbl_list, bbm_list, adx_list, 
-            vix_ma_list, ma_short_list, ma_long_list
-        )
+            portfolio_values, buy_signals, sell_signals = run_strategy_b(
+                rsi_buy_entry, rsi_exit, adx_threshold, vix_threshold,
+                low_vol_exit_strategy, high_vol_entry_choice,
+                ga_params['commission_rate'], prices, dates,
+                rsi_list, bbl_list, bbm_list, adx_list, 
+                vix_ma_list, ma_short_list, ma_long_list
+            )
 
-        buy_signals_list = [(s[0], s[1]) for s in buy_signals]
-        sell_signals_list = [(s[0], s[1]) for s in sell_signals]
-        basic_metrics = calculate_performance_metrics(portfolio_values, dates, buy_signals_list, sell_signals_list, prices)
+            # --- 核心修改點在這裡 ---
+            # 1. 格式化交易信號以符合 utils 的要求 (字典列表)
+            #    注意：run_strategy_b 返回的信號是 (date, price, rsi) 的元組
+            buy_signals_formatted = [{'date': s[0], 'price': s[1]} for s in buy_signals]
+            sell_signals_formatted = [{'date': s[0], 'price': s[1]} for s in sell_signals]
+            
+            # 2. 直接調用 utils 中的標準化計算函數
+            detailed_metrics = calculate_performance_metrics(
+                portfolio_values,
+                dates,
+                buy_signals_formatted,
+                sell_signals_formatted,
+                prices,
+                risk_free_rate=ga_params.get('risk_free_rate', 0.04),
+                commission_rate=ga_params.get('commission_rate', 0.005)
+            )
+            return detailed_metrics
 
-        average_trade_return = 0.0
-        num_trades_completed = min(len(buy_signals), len(sell_signals))
-        
-        if num_trades_completed > 0:
-            total_trade_returns = 0.0
-            valid_trades = 0
-            for i in range(num_trades_completed):
-                buy_price, sell_price = buy_signals[i][1], sell_signals[i][1]
-                if buy_price > 0 and np.isfinite(buy_price) and np.isfinite(sell_price):
-                    total_trade_returns += (sell_price - buy_price) / buy_price
-                    valid_trades += 1
-            if valid_trades > 0:
-                average_trade_return = total_trade_returns / valid_trades
-
-        max_drop_pct, max_gain_pct = calc_trade_extremes_b(prices, dates, buy_signals, sell_signals)
-
-        detailed_metrics = {
-            'total_return': basic_metrics.get('period_return_pct', 0) / 100,
-            'max_drawdown': basic_metrics.get('max_drawdown_pct', 0) / 100,
-            'profit_factor': basic_metrics.get('profit_factor', 0.01),
-            'trade_count': num_trades_completed,
-            'std_dev': np.std(portfolio_values) if len(portfolio_values) > 1 else 0.001,
-            'win_rate_pct': basic_metrics.get('win_rate_pct', 0.0),
-            'sharpe_ratio': basic_metrics.get('sharpe_ratio', 0.0),
-            'average_trade_return': average_trade_return,
-            'max_trade_drop_pct': max_drop_pct,
-            'max_trade_gain_pct': max_gain_pct
-        }
-        return detailed_metrics
-    except Exception as e:
-        logger.error(f"❌ 計算系統B詳細指標時發生錯誤: {e}")
-        traceback.print_exc()
-        return {
-            'total_return': 0, 'max_drawdown': 1, 'profit_factor': 0.01,
-            'trade_count': 0, 'std_dev': 1, 'win_rate_pct': 0, 'sharpe_ratio': 0,
-            'average_trade_return': 0, 'max_trade_drop_pct': 0.0, 'max_trade_gain_pct': 0.0
-        }
+        except Exception as e:
+            logger.error(f"❌ 計算系統B詳細指標時發生錯誤: {e}")
+            traceback.print_exc()
+            # 返回一個包含所有鍵的失敗物件
+            return {
+                'total_return': 0, 'max_drawdown': 1, 'profit_factor': 0.01,
+                'trade_count': 0, 'std_dev': 1, 'win_rate_pct': 0, 'sharpe_ratio': 0,
+                'average_trade_return': 0, 'max_trade_drop_pct': 0.0, 'max_trade_gain_pct': 0.0
+            }
 
 # ═══════════════════════════════════════════════════════════════
 # 🚀 主要訓練引擎 (系統B)
@@ -329,6 +268,7 @@ def run_offline_training_b(stock_list_csv_path, market_type, config):
 
     ga_params_b = GA_PARAMS_CONFIG_B.copy()
     ga_params_b['nsga2_enabled'] = config.ENABLE_NSGA2
+    ga_params_b['risk_free_rate'] = config.RISK_FREE_RATE
     if config.ENABLE_NSGA2:
         ga_params_b.update(config.NSGA2_CONFIG)
         logger.info(f"🔧 使用 NSGA-II 多目標優化配置 (選擇方法: {config.NSGA2_CONFIG['nsga2_selection_method']})")
@@ -531,9 +471,7 @@ def save_strategies_to_database_b(top_champions, ticker, market_type, config):
 
                 # 📋 準備資料庫數據 - 🔥 添加系統B標記
                 strategy_details = format_gene_parameters_to_text_b(best_gene)
-                # 確保策略描述包含系統B標記
-                if "System B" not in strategy_details:
-                    strategy_details = f"[System B] {strategy_details}"
+                
 
                 game_data = {
                     "user_id": config.SYSTEM_AI_USER_ID,
