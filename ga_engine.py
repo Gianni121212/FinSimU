@@ -1,4 +1,6 @@
-# ga_engine.py - 支援 NSGA-II 多目標優化與平均交易報酬率 
+# ga_engine.py - 完整版支援 NSGA-II 多目標優化與平均交易報酬率 (修復版)
+
+# 版本: 2.1 - 修復NSGA-II基因生成和交易獎勵機制
 
 import pandas as pd
 import numpy as np
@@ -47,7 +49,7 @@ STRATEGY_CONFIG_SHARED_GA = {
     'macd_fast_period_options': [8, 12],
     'macd_slow_period_options': [21, 26],
     'macd_signal_period_options': [9],
-    'commission_rate': 0.003,
+    'commission_rate': 0.005,
 }
 
 GA_PARAMS_CONFIG = {
@@ -63,7 +65,7 @@ GA_PARAMS_CONFIG = {
     'no_trade_penalty_factor': 0.1,
     'low_trade_penalty_factor': 0.75,
     # NSGA-II 特定參數
-    'nsga2_enabled': False,
+    'nsga2_enabled': True,
     'nsga2_objectives_num': 4,
     'nsga2_selection_method': 'custom_balance',
     'min_required_trades': 5,
@@ -873,7 +875,19 @@ class MultiObjectiveStrategyProblem(Problem):
         max_drawdown = np.max(drawdowns) if len(drawdowns) > 0 else 0
 
         std_dev = np.std(portfolio_values_clean) if len(portfolio_values_clean) > 1 else 0.001
-
+         
+        # === 【新增】從配置中獲取無風險利率 ===
+        risk_free_rate = ga_params_config_for_penalties.get('risk_free_rate', 0.04)
+        
+        # === 【新增】計算夏普比率 ===
+        sharpe_ratio = 0.0
+        if std_dev > 1e-9:
+            daily_returns = pd.Series(portfolio_values_clean).pct_change().dropna()
+            if not daily_returns.empty:
+                excess_returns = daily_returns - (risk_free_rate / 252)
+                if np.std(excess_returns) > 0:
+                    sharpe_ratio = (np.mean(excess_returns) / np.std(excess_returns)) * np.sqrt(252)
+                    
         total_profit = 0.0
         total_loss = 0.0
         wins = 0
@@ -911,7 +925,8 @@ class MultiObjectiveStrategyProblem(Problem):
             'trade_count': completed_trades_count,
             'std_dev': max(std_dev, 0.001),
             'win_rate_pct': win_rate_pct,
-            'average_trade_return': average_trade_return
+            'average_trade_return': average_trade_return,
+            'sharpe_ratio': sharpe_ratio  
         }
 
 # =======================================================================================
@@ -1370,180 +1385,156 @@ def check_ga_buy_signal_at_latest_point(
         return False
 
 def format_ga_gene_parameters_to_text(gene):
-    """將基因參數轉換為詳細的中文策略描述 - 只顯示實際使用的參數"""
+    """
+    
+    將系統A基因參數轉換為詳細、統一且易於理解的中文策略描述。
+    """
     try:
         if not gene or len(gene) != len(GENE_MAP):
-            return "基因格式錯誤"
-        
-        # 解析基本策略資訊
-        regime_choice = gene[GENE_MAP['regime_choice']]
-        normal_strat = gene[GENE_MAP['normal_strat']]
-        risk_off_strat = gene[GENE_MAP['risk_off_strat']]
-        
-        regime_name = "VIX波動率指標" if regime_choice == 0 else "市場情緒指標"
-        normal_strat_name = STRAT_NAMES[normal_strat]
-        risk_off_strat_name = STRAT_NAMES[risk_off_strat]
-        
-        # 市場狀態閾值
-        if regime_choice == 0:
-            regime_threshold = gene[GENE_MAP['vix_thr']]
-            regime_desc = f"{regime_name} ≥ {regime_threshold} 時進入風險規避模式"
-        else:
-            regime_threshold = gene[GENE_MAP['sentiment_thr']]
-            regime_desc = f"{regime_name} ≤ {regime_threshold} 時進入風險規避模式"
-        
-        # 獲取配置選項
+            return "基因格式錯誤 (長度不符)"
+
+        # --------------------------------------------------
+        # 1. 解析基因，獲取所有需要的參數
+        # --------------------------------------------------
         config = GA_PARAMS_CONFIG
         
-        # 分析實際使用的策略和參數
-        used_strategies = {normal_strat, risk_off_strat}
-        used_indicators = set()
-        strategy_details = []
+        # 市場狀態判斷
+        regime_choice = gene[GENE_MAP['regime_choice']]
+        regime_indicator_name = "VIX波動率指標" if regime_choice == 0 else "市場情緒指標"
         
-        # 根據使用的策略確定需要的指標
-        for strat_idx in used_strategies:
-            strat_name = STRAT_NAMES[strat_idx]
-            if strat_idx == 0:  # MA Cross
-                used_indicators.update(['ma_short', 'ma_long'])
-                ma_short = config['ma_period_options'][gene[GENE_MAP['ma_s_p']]]
-                ma_long = config['ma_period_options'][gene[GENE_MAP['ma_l_p']]]
-                strategy_details.append(f"均線交叉策略：短期{ma_short}日均線上穿長期{ma_long}日均線時買入")
-                
-            elif strat_idx == 1:  # Triple EMA
-                used_indicators.update(['ema_short', 'ema_medium', 'ema_long'])
-                ema_s = config['ema_s_period_options'][gene[GENE_MAP['ema_s_p']]]
-                ema_m = config['ema_m_period_options'][gene[GENE_MAP['ema_m_p']]]
-                ema_l = config['ema_l_period_options'][gene[GENE_MAP['ema_l_p']]]
-                strategy_details.append(f"三重指數移動平均策略：{ema_s}日EMA > {ema_m}日EMA > {ema_l}日EMA 時買入")
-                
-            elif strat_idx == 2:  # MA+MACD+RSI
-                used_indicators.update(['ma_long', 'macd', 'rsi'])
-                ma_long = config['ma_period_options'][gene[GENE_MAP['ma_l_p']]]
-                macd_fast = config['macd_fast_period_options'][gene[GENE_MAP['macd_f_p']]]
-                macd_slow = config['macd_slow_period_options'][gene[GENE_MAP['macd_s_p']]]
-                macd_signal = config['macd_signal_period_options'][gene[GENE_MAP['macd_sig_p']]]
-                rsi_period = config['rsi_period_options'][gene[GENE_MAP['rsi_p']]]
-                strategy_details.append(f"複合技術策略：價格突破{ma_long}日均線 + MACD({macd_fast},{macd_slow},{macd_signal})金叉向上 + RSI({rsi_period})>50 時買入")
-                
-            elif strat_idx == 3:  # EMA+RSI
-                used_indicators.update(['ema_long', 'rsi'])
-                ema_l = config['ema_l_period_options'][gene[GENE_MAP['ema_l_p']]]
-                rsi_period = config['rsi_period_options'][gene[GENE_MAP['rsi_p']]]
-                strategy_details.append(f"EMA+RSI策略：價格突破{ema_l}日EMA + RSI({rsi_period})>50 時買入")
-                
-            elif strat_idx == 4:  # BB+RSI
-                used_indicators.update(['bollinger', 'rsi'])
-                bb_length = config['bb_length_options'][gene[GENE_MAP['bb_l_p']]]
-                bb_std = config['bb_std_options'][gene[GENE_MAP['bb_s_p']]]
-                rsi_period = config['rsi_period_options'][gene[GENE_MAP['rsi_p']]]
-                rsi_buy = gene[GENE_MAP['rsi_buy_thr']]
-                rsi_sell = gene[GENE_MAP['rsi_sell_thr']]
-                strategy_details.append(f"布林帶+RSI策略：價格觸及布林帶({bb_length}日,{bb_std}倍標準差)下軌 + RSI({rsi_period})<{rsi_buy} 時買入，RSI>{rsi_sell} 後回落時賣出")
-                
-            elif strat_idx == 5:  # BB+ADX
-                used_indicators.update(['bollinger', 'adx'])
-                bb_length = config['bb_length_options'][gene[GENE_MAP['bb_l_p']]]
-                bb_std = config['bb_std_options'][gene[GENE_MAP['bb_s_p']]]
-                adx_period = config['adx_period_options'][gene[GENE_MAP['adx_p']]]
-                adx_thr = gene[GENE_MAP['adx_thr']]
-                strategy_details.append(f"布林帶+ADX策略：價格觸及布林帶({bb_length}日,{bb_std}倍標準差)下軌 + ADX({adx_period})>{adx_thr} 確認趨勢強度時買入")
-                
-            elif strat_idx == 6:  # ATR+KD
-                used_indicators.update(['atr', 'kd'])
-                atr_period = config['atr_period_options'][gene[GENE_MAP['atr_p']]]
-                kd_k = config['kd_k_period_options'][gene[GENE_MAP['kd_k_p']]]
-                kd_d = config['kd_d_period_options'][gene[GENE_MAP['kd_d_p']]]
-                kd_smooth = config['kd_smooth_period_options'][gene[GENE_MAP['kd_s_p']]]
-                kd_buy = gene[GENE_MAP['kd_buy_thr']]
-                kd_sell = gene[GENE_MAP['kd_sell_thr']]
-                strategy_details.append(f"ATR+KD策略：KD({kd_k},{kd_d},{kd_smooth})低檔(<{kd_buy})金叉 + ATR({atr_period})確認波動率時買入，設定1.5倍ATR止損")
-                
-            elif strat_idx == 7:  # BB+MACD
-                used_indicators.update(['bollinger', 'macd'])
-                bb_length = config['bb_length_options'][gene[GENE_MAP['bb_l_p']]]
-                bb_std = config['bb_std_options'][gene[GENE_MAP['bb_s_p']]]
-                macd_fast = config['macd_fast_period_options'][gene[GENE_MAP['macd_f_p']]]
-                macd_slow = config['macd_slow_period_options'][gene[GENE_MAP['macd_s_p']]]
-                macd_signal = config['macd_signal_period_options'][gene[GENE_MAP['macd_sig_p']]]
-                strategy_details.append(f"布林帶+MACD策略：價格突破布林帶({bb_length}日,{bb_std}倍標準差)上軌 + MACD({macd_fast},{macd_slow},{macd_signal})金叉向上時買入")
-        
-        # 市場狀態判斷指標
-        state_indicators = []
         if regime_choice == 0:
+            regime_threshold = gene[GENE_MAP['vix_thr']]
             vix_ma_period = config['vix_ma_period_options'][gene[GENE_MAP['vix_ma_p']]]
-            state_indicators.append(f"VIX {vix_ma_period}日移動平均")
+            regime_indicator_details = f"VIX {vix_ma_period}日均線"
+            regime_condition_desc = f"≥ {regime_threshold}"
         else:
+            regime_threshold = gene[GENE_MAP['sentiment_thr']]
             sentiment_ma_period = config['sentiment_ma_period_options'][gene[GENE_MAP['sentiment_ma_p']]]
-            state_indicators.append(f"市場情緒 {sentiment_ma_period}日移動平均")
+            regime_indicator_details = f"市場情緒 {sentiment_ma_period}週均線"
+            regime_condition_desc = f"≤ {regime_threshold}"
+
+        # 策略選擇
+        low_vol_strat_idx = gene[GENE_MAP['normal_strat']]
+        high_vol_strat_idx = gene[GENE_MAP['risk_off_strat']]
         
-        # 組裝最終描述
-        description = f"""[System A]  🎯 【核心策略】
-    正常市場：{normal_strat_name}
-   風險規避：{risk_off_strat_name}
-
-🚦 【市場狀態判斷】
-   {regime_desc}
-   判斷指標：{', '.join(state_indicators)}
-
-📈 【策略執行邏輯】"""
-
-        for i, detail in enumerate(strategy_details, 1):
-            description += f"\n   {i}. {detail}"
-
-        # 只顯示實際使用的技術指標參數
-        description += f"\n\n⚙️  【技術指標參數】"
+        # --------------------------------------------------
+        # 2. 為每種策略生成簡潔的描述和參數
+        # --------------------------------------------------
         
-        if 'rsi' in used_indicators:
-            rsi_period = config['rsi_period_options'][gene[GENE_MAP['rsi_p']]]
-            description += f"\n   • RSI相對強弱指標：{rsi_period}日週期"
+        def get_strategy_description(strat_idx):
+            """輔助函式：根據策略索引生成描述和所需參數"""
             
-        if any(x in used_indicators for x in ['ma_short', 'ma_long']):
-            if 'ma_short' in used_indicators:
-                ma_short = config['ma_period_options'][gene[GENE_MAP['ma_s_p']]]
-                description += f"\n   • 短期移動平均：{ma_short}日"
-            if 'ma_long' in used_indicators:
-                ma_long = config['ma_period_options'][gene[GENE_MAP['ma_l_p']]]
-                description += f"\n   • 長期移動平均：{ma_long}日"
-                
-        if any(x in used_indicators for x in ['ema_short', 'ema_medium', 'ema_long']):
-            if 'ema_short' in used_indicators:
-                ema_s = config['ema_s_period_options'][gene[GENE_MAP['ema_s_p']]]
-                description += f"\n   • 短期指數移動平均：{ema_s}日"
-            if 'ema_medium' in used_indicators:
-                ema_m = config['ema_m_period_options'][gene[GENE_MAP['ema_m_p']]]
-                description += f"\n   • 中期指數移動平均：{ema_m}日"
-            if 'ema_long' in used_indicators:
-                ema_l = config['ema_l_period_options'][gene[GENE_MAP['ema_l_p']]]
-                description += f"\n   • 長期指數移動平均：{ema_l}日"
-                
-        if 'macd' in used_indicators:
-            macd_fast = config['macd_fast_period_options'][gene[GENE_MAP['macd_f_p']]]
-            macd_slow = config['macd_slow_period_options'][gene[GENE_MAP['macd_s_p']]]
-            macd_signal = config['macd_signal_period_options'][gene[GENE_MAP['macd_sig_p']]]
-            description += f"\n   • MACD指標：快線{macd_fast}日，慢線{macd_slow}日，信號線{macd_signal}日"
+            # 買入條件描述
+            buy_desc = ""
+            # 賣出條件描述
+            sell_desc = ""
+            # 關鍵參數描述
+            params_desc = ""
             
-        if 'bollinger' in used_indicators:
-            bb_length = config['bb_length_options'][gene[GENE_MAP['bb_l_p']]]
-            bb_std = config['bb_std_options'][gene[GENE_MAP['bb_s_p']]]
-            description += f"\n   • 布林帶：{bb_length}日週期，{bb_std}倍標準差"
+            gene_map = GENE_MAP
             
-        if 'adx' in used_indicators:
-            adx_period = config['adx_period_options'][gene[GENE_MAP['adx_p']]]
-            description += f"\n   • ADX趨勢強度：{adx_period}日週期"
-            
-        if 'atr' in used_indicators:
-            atr_period = config['atr_period_options'][gene[GENE_MAP['atr_p']]]
-            description += f"\n   • ATR真實波動率：{atr_period}日週期"
-            
-        if 'kd' in used_indicators:
-            kd_k = config['kd_k_period_options'][gene[GENE_MAP['kd_k_p']]]
-            kd_d = config['kd_d_period_options'][gene[GENE_MAP['kd_d_p']]]
-            kd_smooth = config['kd_smooth_period_options'][gene[GENE_MAP['kd_s_p']]]
-            description += f"\n   • KD隨機指標：K值{kd_k}日，D值{kd_d}日，平滑{kd_smooth}日"
+            if strat_idx == 0: # MA Cross
+                ma_s = config['ma_period_options'][gene[gene_map['ma_s_p']]]
+                ma_l = config['ma_period_options'][gene[gene_map['ma_l_p']]]
+                buy_desc = f"短期均線({ma_s}日)上穿長期均線({ma_l}日)。"
+                sell_desc = "均線死叉時賣出。"
+                params_desc = f"均線交叉 ({ma_s}日 vs {ma_l}日)"
+            elif strat_idx == 1: # Triple EMA
+                ema_s = config['ema_s_period_options'][gene[gene_map['ema_s_p']]]
+                ema_m = config['ema_m_period_options'][gene[gene_map['ema_m_p']]]
+                ema_l = config['ema_l_period_options'][gene[gene_map['ema_l_p']]]
+                buy_desc = f"短期EMA({ema_s}日) > 中期EMA({ema_m}日) > 長期EMA({ema_l}日)形成多頭排列。"
+                sell_desc = "短期EMA下穿中期EMA時賣出。"
+                params_desc = f"三重EMA ({ema_s}/{ema_m}/{ema_l}日)"
+            elif strat_idx == 2: # MA+MACD+RSI
+                ma_l = config['ma_period_options'][gene[gene_map['ma_l_p']]]
+                rsi_p = config['rsi_period_options'][gene[gene_map['rsi_p']]]
+                buy_desc = f"價格高於{ma_l}日均線，且MACD金叉、RSI({rsi_p}日)強勢。"
+                sell_desc = "價格跌破長期均線或MACD死叉時賣出。"
+                params_desc = f"均線({ma_l}日), MACD, RSI({rsi_p}日)"
+            elif strat_idx == 3: # EMA+RSI
+                ema_l = config['ema_l_period_options'][gene[gene_map['ema_l_p']]]
+                rsi_p = config['rsi_period_options'][gene[gene_map['rsi_p']]]
+                buy_desc = f"價格確認站穩於長期EMA({ema_l}日)之上，且RSI({rsi_p}日)顯示上漲動能。"
+                sell_desc = "價格跌破長期EMA時賣出。"
+                params_desc = f"長期EMA({ema_l}日), RSI({rsi_p}日)"
+            elif strat_idx == 4: # BB+RSI
+                bb_l = config['bb_length_options'][gene[gene_map['bb_l_p']]]
+                bb_s = config['bb_std_options'][gene[gene_map['bb_s_p']]]
+                rsi_p = config['rsi_period_options'][gene[gene_map['rsi_p']]]
+                rsi_buy = gene[gene_map['rsi_buy_thr']]
+                rsi_sell = gene[gene_map['rsi_sell_thr']]
+                buy_desc = f"價格觸及布林帶下軌，且RSI({rsi_p}日)進入超賣區(<{rsi_buy})。"
+                sell_desc = f"RSI進入超買區(>{rsi_sell})後回落時賣出。"
+                params_desc = f"布林帶({bb_l}日, {bb_s}x), RSI({rsi_p}日, 買<{rsi_buy})"
+            elif strat_idx == 5: # BB+ADX
+                bb_l = config['bb_length_options'][gene[gene_map['bb_l_p']]]
+                bb_s = config['bb_std_options'][gene[gene_map['bb_s_p']]]
+                adx_p = config['adx_period_options'][gene[gene_map['adx_p']]]
+                adx_thr = gene[gene_map['adx_thr']]
+                buy_desc = f"價格觸及布林帶下軌，且ADX({adx_p}日)高於{adx_thr}確認趨勢強度。"
+                sell_desc = "價格回歸至布林帶中軌時賣出。"
+                params_desc = f"布林帶({bb_l}日, {bb_s}x), ADX({adx_p}日, >{adx_thr})"
+            elif strat_idx == 6: # ATR+KD
+                kd_buy = gene[gene_map['kd_buy_thr']]
+                kd_sell = gene[gene_map['kd_sell_thr']]
+                buy_desc = f"KD指標在低檔(K<{kd_buy})發生黃金交叉，且市場波動率放大。"
+                sell_desc = f"KD指標進入高檔(K>{kd_sell})或觸發ATR移動停損時賣出。"
+                params_desc = f"KD指標 (買<{kd_buy}), ATR波動率"
+            elif strat_idx == 7: # BB+MACD
+                bb_l = config['bb_length_options'][gene[gene_map['bb_l_p']]]
+                bb_s = config['bb_std_options'][gene[gene_map['bb_s_p']]]
+                buy_desc = "價格強勢突破布林帶上軌，且MACD指標確認上漲動能。"
+                sell_desc = "價格回落至布林帶中軌以下時賣出。"
+                params_desc = f"布林帶({bb_l}日, {bb_s}x), MACD"
+            else:
+                return "未知策略", "未知", "未知"
 
+            return buy_desc, sell_desc, params_desc
+
+        low_vol_buy, low_vol_sell, low_vol_params = get_strategy_description(low_vol_strat_idx)
+        high_vol_buy, high_vol_sell, high_vol_params = get_strategy_description(high_vol_strat_idx)
+
+        # --------------------------------------------------
+        # 3. 組合最終的描述字串
+        # --------------------------------------------------
+
+        # 策略標籤
+        strategy_styles = {
+            "趨勢追蹤型": [0, 1, 2, 3, 7],
+            "反轉交易型": [4, 5, 6]
+        }
+        
+        style = "混合型"
+        if low_vol_strat_idx in strategy_styles["趨勢追蹤型"] and high_vol_strat_idx in strategy_styles["趨勢追蹤型"]:
+            style = "趨勢追蹤型"
+        elif low_vol_strat_idx in strategy_styles["反轉交易型"] and high_vol_strat_idx in strategy_styles["反轉交易型"]:
+            style = "反轉交易型"
+
+        strategy_tag = f"波動率切換型 {style} 策略"
+
+        # 組合輸出
+        description = f"""
+
+核心邏輯:
+• 根據市場風險變化，在不同交易邏輯間自動切換。
+• 使用 {regime_indicator_name} 判斷市場為「高波動」或「低波動」狀態。
+
+進場條件:
+• [低波動市場]: {low_vol_buy}
+• [高波動市場]: {high_vol_buy}
+
+出場條件:
+• [低波動市場]: {low_vol_sell}
+• [高波動市場]: {high_vol_sell}
+
+關鍵參數:
+• 市場狀態指標: {regime_indicator_details} (閾值: {regime_condition_desc})
+• 低波動指標: {low_vol_params}
+• 高波動指標: {high_vol_params}"""
 
         return description
-        
+
     except Exception as e:
         return f"策略參數解析錯誤：{str(e)}"
 
