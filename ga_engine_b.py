@@ -72,12 +72,12 @@ GA_PARAMS_CONFIG_B = {
     'rsi_threshold_range': (10, 45, 46, 85),  # (min_buy, max_buy, min_exit, max_exit)
     'vix_threshold_range': (15, 30),
     'adx_threshold_range': (20, 40),
-    'commission_rate': 0.003,
+    'commission_rate': 0.005,
     'min_trades_for_full_score': 4,
     'no_trade_penalty_factor': 0.1,
     'low_trade_penalty_factor': 0.75,
     # NSGA-II 特定配置
-    'nsga2_enabled': False,
+    'nsga2_enabled': True,
     'nsga2_selection_method': 'custom_balance',
     'min_required_trades': 5,
     'nsga2_no_trade_penalty_return': -0.5,
@@ -824,7 +824,18 @@ class MultiObjectiveStrategyProblem_B(Problem):
         running_max = np.maximum.accumulate(portfolio_arr)
         drawdowns = (running_max - portfolio_arr) / running_max
         max_drawdown = np.max(drawdowns) if len(drawdowns) > 0 else 0
-
+        
+         # === 【新增】從配置中獲取無風險利率並計算夏普比率 ===
+        risk_free_rate = self.ga_params.get('risk_free_rate', 0.04)
+        sharpe_ratio = 0.0
+        portfolio_arr_clean = portfolio_arr[np.isfinite(portfolio_arr)]
+        if np.std(portfolio_arr_clean) > 0:
+            daily_returns = pd.Series(portfolio_arr_clean).pct_change().dropna()
+            if not daily_returns.empty:
+                excess_returns = daily_returns - (risk_free_rate / 252)
+                if np.std(excess_returns) > 0:
+                    sharpe_ratio = (np.mean(excess_returns) / np.std(excess_returns)) * np.sqrt(252)
+                    
         # 🔥 修復：計算交易指標 + 勝率
         total_profit = 0.0
         total_loss = 0.0
@@ -864,7 +875,8 @@ class MultiObjectiveStrategyProblem_B(Problem):
             'profit_factor': max(profit_factor, 0.01),
             'trade_count': completed_trades,
             'average_trade_return': average_trade_return,
-            'win_rate_pct': win_rate_pct  # 🌟 新增：返回勝率
+            'win_rate_pct': win_rate_pct,  # 🌟 新增：返回勝率
+            'sharpe_ratio': sharpe_ratio
         }
 
 
@@ -955,43 +967,78 @@ def nsga2_optimize_b(prices, dates, precalculated_indicators, ga_params):
         return None, None
 
 def select_best_from_pareto_b(pareto_genes, pareto_objectives, prices, dates, precalculated, selection_method, ga_params):
-    """從帕累托前沿選擇最佳策略 (系統B) - 修復權重讀取"""
-    if len(pareto_genes) == 0:
+    """從帕累托前沿選擇最佳策略 (系統B) - (修正版：嚴格遵守交易次數約束)"""
+    if not pareto_genes:
         return None, {}
     
     all_metrics = []
     temp_problem = MultiObjectiveStrategyProblem_B(prices, dates, precalculated, ga_params)
     
+    # --- ✨ 修正點 1 START ---
+    # 獲取使用者設定的最小交易次數硬性約束
+    min_trades_required = ga_params.get('min_required_trades', 5)
+    logger.info(f"[Pareto Select] 將嚴格篩選交易次數 >= {min_trades_required} 的策略。")
+    
+    valid_genes = []
+    valid_metrics = []
+    
+    # 步驟 1: 遍歷所有帕累托解，計算指標並進行篩選
     for gene in pareto_genes:
         try:
             portfolio_values, buy_signals, sell_signals = temp_problem._run_backtest_raw(np.array(gene))
             metrics = temp_problem._calculate_metrics(portfolio_values, buy_signals, sell_signals)
-            all_metrics.append(metrics)
+            
+            # 關鍵判斷：只將滿足交易次數約束的策略納入候選清單
+            if metrics.get('trade_count', 0) >= min_trades_required:
+                valid_genes.append(gene)
+                valid_metrics.append(metrics)
+            else:
+                # 為了偵錯，可以選擇性地印出被捨棄的策略
+                # print(f"[Debug] 捨棄策略 (交易次數 {metrics.get('trade_count', 0)} < {min_trades_required}): {gene}")
+                pass
+
         except Exception as e:
-            print(f"[GAEngine_B] WARN: 計算帕累托解指標錯誤: {e}")
-            all_metrics.append({
-                'total_return': -0.5, 'max_drawdown': 1.0, 'profit_factor': 0.01,
-                'trade_count': 0, 'average_trade_return': 0.0, 'win_rate_pct': 0.0
-            })
-    
+            logger.warning(f"[Pareto Select] 計算帕累托解指標時出錯: {e}")
+            continue # 出錯的解直接跳過
+
+    # 步驟 2: 判斷是否有任何合格的策略
+    if not valid_metrics:
+        logger.warning(f"[Pareto Select] 警告：在 {len(pareto_genes)} 個帕累托解中，沒有任何一個策略滿足交易次數 >= {min_trades_required} 的條件。")
+        logger.warning("[Pareto Select] 將放寬限制，從所有解中選擇最佳者作為備用方案。")
+        # --- Fallback: 如果沒有任何解滿足條件，則退回到原始邏輯 ---
+        # 重新計算所有解的指標（避免重複計算）
+        all_metrics_fallback = []
+        for gene in pareto_genes:
+            portfolio_values, buy_signals, sell_signals = temp_problem._run_backtest_raw(np.array(gene))
+            metrics = temp_problem._calculate_metrics(portfolio_values, buy_signals, sell_signals)
+            all_metrics_fallback.append(metrics)
+            
+        target_genes_for_scoring = pareto_genes
+        target_metrics_for_scoring = all_metrics_fallback
+    else:
+        logger.info(f"[Pareto Select] 成功篩選出 {len(valid_metrics)} / {len(pareto_genes)} 個交易次數達標的策略進行評分。")
+        target_genes_for_scoring = valid_genes
+        target_metrics_for_scoring = valid_metrics
+    # --- ✨ 修正點 1 END ---
+
     best_idx = 0
     if selection_method == 'custom_balance':
-        # 🔥🔥🔥 --- 系統B 修正 --- 🔥🔥🔥
         custom_weights = ga_params.get('custom_weights', {
             'total_return_weight': 0.35, 'avg_trade_return_weight': 0.30,
             'win_rate_weight': 0.25, 'trade_count_weight': 0.05, 'drawdown_weight': 0.05
         })
-        print(f"[GAEngine_B] 使用自定義權重進行選擇: {custom_weights}")
+        logger.info(f"[Pareto Select] 使用自定義權重進行選擇: {custom_weights}")
 
         def normalize(arr):
             min_val, max_val = np.min(arr), np.max(arr)
             return (arr - min_val) / (max_val - min_val) if (max_val - min_val) > 1e-9 else np.full_like(arr, 0.5)
 
-        all_returns = np.array([m['total_return'] for m in all_metrics])
-        all_avg_trade_returns = np.array([m['average_trade_return'] for m in all_metrics])
-        all_win_rates = np.array([m.get('win_rate_pct', 0) for m in all_metrics])
-        all_trade_counts = np.array([m['trade_count'] for m in all_metrics])
-        all_max_drawdowns = np.array([m['max_drawdown'] for m in all_metrics])
+        # --- ✨ 修正點 2: 使用篩選後的 target_metrics_for_scoring 進行計算 ---
+        all_returns = np.array([m['total_return'] for m in target_metrics_for_scoring])
+        all_avg_trade_returns = np.array([m['average_trade_return'] for m in target_metrics_for_scoring])
+        all_win_rates = np.array([m.get('win_rate_pct', 0) for m in target_metrics_for_scoring])
+        all_trade_counts = np.array([m['trade_count'] for m in target_metrics_for_scoring])
+        all_max_drawdowns = np.array([m['max_drawdown'] for m in target_metrics_for_scoring])
 
         norm_returns = normalize(all_returns)
         norm_avg_trade_returns = normalize(all_avg_trade_returns)
@@ -1011,131 +1058,118 @@ def select_best_from_pareto_b(pareto_genes, pareto_objectives, prices, dates, pr
     else:
         # 其他選擇方法 (例如: 'return', 'average_trade_return')
         if selection_method == 'return':
-            best_idx = np.argmax([m['total_return'] for m in all_metrics])
+            best_idx = np.argmax([m['total_return'] for m in target_metrics_for_scoring])
         elif selection_method == 'average_trade_return':
-            best_idx = np.argmax([m['average_trade_return'] for m in all_metrics])
+            best_idx = np.argmax([m['average_trade_return'] for m in target_metrics_for_scoring])
         else: # 預設 fallback
-            best_idx = np.argmax([m['total_return'] for m in all_metrics])
+            best_idx = np.argmax([m['total_return'] for m in target_metrics_for_scoring])
 
-    return pareto_genes[best_idx], all_metrics[best_idx]
+    # --- ✨ 修正點 3: 從篩選後的 target_genes_for_scoring 和 target_metrics_for_scoring 中返回結果 ---
+    return target_genes_for_scoring[best_idx], target_metrics_for_scoring[best_idx]
 
 # ═══════════════════════════════════════════════════════════════
 # 🎨 策略描述函數 (系統B)
 # ═══════════════════════════════════════════════════════════════
 
 def format_gene_parameters_to_text_b(gene):
-    """將系統B基因轉換為詳細的中文策略描述 - 只顯示實際使用的參數"""
+    """
+   
+    將系統B基因參數轉換為詳細、統一且易於理解的中文策略描述。
+    """
     try:
         if not gene or len(gene) != 10:
-            return "系統B基因格式錯誤"
+            return "系統B基因格式錯誤 (長度不符)"
+
+        # --------------------------------------------------
+        # 1. 解析基因，獲取所有需要的參數
+        # --------------------------------------------------
+        config = STRATEGY_CONFIG_B
         
-        # 🧬 解析10基因參數
-        rsi_buy_entry = gene[0]
-        rsi_exit = gene[1]
-        vix_threshold = gene[2]
-        low_vol_exit = gene[3]
-        rsi_period_choice = gene[4]
-        vix_ma_choice = gene[5]
-        bb_length_choice = gene[6]
-        bb_std_choice = gene[7]
-        adx_threshold = gene[8]
-        high_vol_entry = gene[9]
+        # 市場狀態判斷
+        vix_threshold = gene[GENE_MAP_B['vix_threshold']]
+        vix_ma_choice = gene[GENE_MAP_B['vix_ma_choice']]
+        vix_ma_period = config['vix_ma_period_options'][vix_ma_choice]
+        regime_indicator_details = f"VIX {vix_ma_period}日均線"
+        regime_condition_desc = f"≥ {vix_threshold}"
         
-        # 📊 獲取對應的參數值
-        rsi_period = STRATEGY_CONFIG_B['rsi_period_options'][rsi_period_choice]
-        vix_ma_period = STRATEGY_CONFIG_B['vix_ma_period_options'][vix_ma_choice]
-        bb_length = STRATEGY_CONFIG_B['bb_length_options'][bb_length_choice]
-        bb_std = STRATEGY_CONFIG_B['bb_std_options'][bb_std_choice]
+        # 策略選擇
+        high_vol_entry_choice = gene[GENE_MAP_B['high_vol_entry']]
+        low_vol_exit_choice = gene[GENE_MAP_B['low_vol_exit']]
         
-        # 🎯 分析實際使用的策略和指標
-        used_indicators = set(['vix_ma', 'rsi', 'bb'])  # 基本必用指標
-        strategy_details = []
+        # 關鍵參數
+        rsi_buy_entry = gene[GENE_MAP_B['rsi_buy_entry']]
+        rsi_exit = gene[GENE_MAP_B['rsi_exit']]
+        adx_threshold = gene[GENE_MAP_B['adx_threshold']]
         
-        # 高波動市場策略分析
-        if high_vol_entry == 0:
-            high_vol_strategy_name = "布林帶+RSI反轉策略"
-            high_vol_strategy_desc = f"價格觸及布林帶({bb_length}日, {bb_std}倍標準差)下軌 且 RSI({rsi_period}日)<{rsi_buy_entry} 時買入"
-            high_vol_exit_desc = f"RSI升至{rsi_exit}以上後回落時賣出"
-            used_indicators.add('rsi')
+        rsi_period_choice = gene[GENE_MAP_B['rsi_period_choice']]
+        bb_length_choice = gene[GENE_MAP_B['bb_length_choice']]
+        bb_std_choice = gene[GENE_MAP_B['bb_std_choice']]
+        
+        rsi_period = config['rsi_period_options'][rsi_period_choice]
+        bb_length = config['bb_length_options'][bb_length_choice]
+        bb_std = config['bb_std_options'][bb_std_choice]
+
+        # --------------------------------------------------
+        # 2. 為高波動和低波動市場生成描述
+        # --------------------------------------------------
+        
+        # --- 高波動市場 ---
+        if high_vol_entry_choice == 0: # BB+RSI
+            high_vol_buy = f"價格觸及布林帶下軌，且RSI({rsi_period}日)進入超賣區(<{rsi_buy_entry})。"
+            high_vol_sell = f"RSI進入超買區(>{rsi_exit})後回落時賣出。"
+            high_vol_params = f"布林帶({bb_length}日, {bb_std}x), RSI({rsi_period}日, 買<{rsi_buy_entry})"
+            high_vol_style = "反轉交易型"
+        else: # BB+ADX
+            high_vol_buy = f"價格觸及布林帶下軌，且ADX(14日)高於{adx_threshold}確認趨勢強度。"
+            high_vol_sell = "價格回歸至布林帶中軌時賣出。"
+            high_vol_params = f"布林帶({bb_length}日, {bb_std}x), ADX(14日, >{adx_threshold})"
+            high_vol_style = "趨勢追蹤型"
+
+        # --- 低波動市場 ---
+        low_vol_buy = "短期均線(5日)上穿長期均線(10日)。"
+        if low_vol_exit_choice == 0:
+            low_vol_sell = "價格跌破短期均線(5日)時賣出。"
         else:
-            high_vol_strategy_name = "布林帶+ADX趨勢策略"
-            high_vol_strategy_desc = f"價格觸及布林帶({bb_length}日, {bb_std}倍標準差)下軌 且 ADX(14日)>{adx_threshold} 確認趨勢強度時買入"
-            high_vol_exit_desc = f"價格回升至布林帶中軌以上時賣出"
-            used_indicators.add('adx')
-        
-        # 低波動市場策略分析
-        low_vol_strategy_name = "均線交叉策略"
-        low_vol_strategy_desc = "短期5日均線上穿長期10日均線時買入"
-        
-        if low_vol_exit == 0:
-            low_vol_exit_desc = "價格跌破短期5日均線時賣出"
-        else:
-            low_vol_exit_desc = "短期5日均線下穿長期10日均線時賣出"
-        
-        used_indicators.add('ma')
-        
-        # 📋 組裝策略執行邏輯
-        strategy_details.append(f"【高波動市場策略】{high_vol_strategy_name}")
-        strategy_details.append(f"  進場條件: {high_vol_strategy_desc}")
-        strategy_details.append(f"  出場條件: {high_vol_exit_desc}")
-        strategy_details.append(f"【低波動市場策略】{low_vol_strategy_name}")
-        strategy_details.append(f"  進場條件: {low_vol_strategy_desc}")
-        strategy_details.append(f"  出場條件: {low_vol_exit_desc}")
-        
-        # 🌟 組裝最終描述
+            low_vol_sell = "短期均線(5日)死叉長期均線(10日)時賣出。"
+        low_vol_params = "均線交叉 (5日 vs 10日)"
+        low_vol_style = "趨勢追蹤型"
+
+        # --------------------------------------------------
+        # 3. 組合最終的描述字串
+        # --------------------------------------------------
+
+        # 策略標籤
+        style = "混合型"
+        if high_vol_style == low_vol_style:
+            style = high_vol_style
+
+        strategy_tag = f"波動率切換型 {style} 策略"
+
+        # 組合輸出
         description = f"""
 
-🎯 【核心策略】
-   市場狀態判斷: VIX {vix_ma_period}日移動平均 ≥ {vix_threshold} 為高波動市場
-   高波動策略: {high_vol_strategy_name}
-   低波動策略: {low_vol_strategy_name}
+核心邏輯:
+• 根據市場風險變化，在不同交易邏輯間自動切換。
+• 使用 VIX波動率指標 判斷市場為「高波動」或「低波動」狀態。
 
-🚦 【交易信號邏輯】"""
+進場條件:
+• [低波動市場]: {low_vol_buy}
+• [高波動市場]: {high_vol_buy}
 
-        for detail in strategy_details:
-            if detail.startswith("【"):
-                description += f"\n   ► {detail}"
-            else:
-                description += f"\n     {detail}"
+出場條件:
+• [低波動市場]: {low_vol_sell}
+• [高波動市場]: {high_vol_sell}
 
-        description += f"\n\n⚙️  【技術指標配置】（僅顯示策略實際使用項目）"
-        
-        # 只顯示實際使用的指標
-        if 'vix_ma' in used_indicators:
-            description += f"\n   • VIX波動率指標: {vix_ma_period}日移動平均（市場狀態判斷）"
-            
-        if 'rsi' in used_indicators:
-            description += f"\n   • RSI相對強弱指標: {rsi_period}日週期（買入<{rsi_buy_entry}, 賣出>{rsi_exit}）"
-            
-        if 'bb' in used_indicators:
-            description += f"\n   • 布林帶指標: {bb_length}日週期, {bb_std}倍標準差（支撐阻力判斷）"
-            
-        if 'adx' in used_indicators:
-            description += f"\n   • ADX趨勢強度: 固定14日週期（趨勢確認>{adx_threshold}）"
-            
-        if 'ma' in used_indicators:
-            description += f"\n   • 移動平均線: 短期5日, 長期10日（趨勢跟隨）"
-
-        description += f"\n\n📈 【策略執行流程】"
-        description += f"\n   1️⃣  每日開盤前計算VIX {vix_ma_period}日移動平均值"
-        description += f"\n   2️⃣  判斷市場狀態：VIX≥{vix_threshold}為高波動，<{vix_threshold}為低波動"
-        description += f"\n   3️⃣  根據市場狀態選擇對應策略執行交易信號"
-        description += f"\n   4️⃣  嚴格按照進出場條件執行，避免情緒化交易"
-
-
-        description += f"\n\n🔍 【適用市場環境】"
-        if high_vol_entry == 0:
-            description += f"\n   📊 高波動期間: 擅長捕捉超跌反彈機會"
-        else:
-            description += f"\n   📊 高波動期間: 擅長捕捉趨勢突破機會"
-        description += f"\n   📊 低波動期間: 穩健跟隨中長期趨勢"
-        description += f"\n   📊 震盪市場: 利用布林帶邊界進行區間交易"
-        description += f"\n   📊 趨勢市場: 均線系統確保趨勢跟隨能力"
+關鍵參數:
+• 市場狀態指標: {regime_indicator_details} (閾值: {regime_condition_desc})
+• 低波動指標: {low_vol_params}
+• 高波動指標: {high_vol_params}"""
 
         return description
-        
+
     except Exception as e:
         return f"系統B策略參數解析錯誤：{str(e)}"
+
 
 
 # ═══════════════════════════════════════════════════════════════
