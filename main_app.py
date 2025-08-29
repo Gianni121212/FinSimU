@@ -1,4 +1,7 @@
-
+# program_merged.py - 整合版 AI 策略分析與市場分析平台
+# 整合了：
+# 1. 來自 program.py 的市場分析儀表板、Gemini AI 新聞分析、個股深度報告和自動化排程任務
+# 2. 來自 stock_ga_web.py 的使用者認證系統、策略訓練器、手動回測和策略清單功能
 
 import os
 import logging
@@ -42,6 +45,9 @@ import traceback
 import feedparser
 import urllib.parse
 import random
+import queue
+import threading
+import uuid
 
 # FinBERT 相關函式庫 (軟性依賴)
 try:
@@ -58,6 +64,19 @@ logger = logging.getLogger(__name__)
 # 建立Flask應用
 app = Flask(__name__)
 CORS(app)
+
+# 【新增程式碼 START】
+# --- 簡單的內建任務佇列系統 ---
+# 1. 任務佇列: 存放待處理的訓練任務
+task_queue = queue.Queue()
+
+# 2. 結果字典: 用於儲存任務的狀態和最終結果
+#    鍵是 task_id，值是包含 status 和 result 的字典
+task_results = {}
+
+# 3. 執行緒鎖: 保護 task_results 在多執行緒環境下的讀寫安全
+results_lock = threading.Lock()
+# 【新增程式碼 END】
 
 # === 從 stock_ga_web.py 移植：Flask-Login 設定 ===
 app.secret_key = os.getenv('SECRET_KEY', os.urandom(24))
@@ -131,6 +150,107 @@ if GEMINI_API_KEY and GEMINI_AVAILABLE:
     except Exception as e:
         logger.error(f"配置 Gemini AI 失敗: {e}")
 
+WEIGHTS = {
+    '積極型': {'annualized_return': 0.45, 'sharpe_ratio': 0.35, 'max_drawdown': 0.10, 'win_rate': 0.10},
+    '均衡型': {'annualized_return': 0.20, 'sharpe_ratio': 0.50, 'max_drawdown': 0.20, 'win_rate': 0.10},
+    '保守型': {'annualized_return': 0.10, 'sharpe_ratio': 0.40, 'max_drawdown': 0.40, 'win_rate': 0.10}
+}
+
+AI_ADJUSTMENT_FACTORS = {
+    'Bullish': 1.15,
+    'Neutral': 1.0,
+    'Bearish': 0.85
+}
+
+# 【新增程式碼 START】
+def training_worker_function():
+    """
+    這是在背景執行的執行緒函式，它會永遠循環，
+    從 task_queue 中依序取出任務並執行。
+    """
+    logger.info("✅ [Worker Thread] 背景訓練工人已啟動，等待任務...")
+    while True:
+        # .get() 是阻塞操作，如果佇列為空，它會一直等待直到有新任務進來
+        task_id, task_data = task_queue.get()
+        
+        logger.info(f"🚚 [Worker Thread] 接收到新任務: {task_id} ({task_data['ticker']})")
+
+        try:
+            # 1. 更新任務狀態為 "執行中" (STARTED)
+            with results_lock:
+                task_results[task_id] = {'status': 'STARTED', 'start_time': time.time()}
+
+            # 2. 執行耗時的訓練任務
+            #    為了執行緒安全，我們在執行緒內部建立一個新的 trainer 實例
+            local_trainer = SingleStockTrainer()
+
+            # --- 將原本 /api/train 的核心邏輯完整搬移到這裡 ---
+            ticker = task_data['ticker']
+            start_date = task_data['start_date']
+            end_date = task_data['end_date']
+            custom_weights = task_data['custom_weights']
+            basic_params = task_data['basic_params']
+            fixed_num_runs = 10
+
+            logger.info(f"--- [Worker Thread] 開始訓練系統 A for {ticker} ---")
+            result_A = local_trainer.run_training(
+                ticker=ticker, start_date=start_date, end_date=end_date, system_type='A',
+                custom_weights=custom_weights, basic_params=basic_params, num_runs=fixed_num_runs
+            )
+            
+            logger.info(f"--- [Worker Thread] 開始訓練系統 B for {ticker} ---")
+            result_B = local_trainer.run_training(
+                ticker=ticker, start_date=start_date, end_date=end_date, system_type='B',
+                custom_weights=custom_weights, basic_params=basic_params, num_runs=fixed_num_runs
+            )
+            
+            combined_results = []
+            if result_A.get('success') and result_A.get('results'):
+                strategy_A = result_A['results'][0]
+                strategy_A['rank'] = 1
+                strategy_A['strategy_type_name'] = '策略 1 '
+                combined_results.append(strategy_A)
+            
+            if result_B.get('success') and result_B.get('results'):
+                strategy_B = result_B['results'][0]
+                strategy_B['rank'] = 2
+                strategy_B['strategy_type_name'] = '策略 2 '
+                combined_results.append(strategy_B)
+
+            if not combined_results:
+                raise Exception("訓練成功，但未能產生任何有效策略。")
+            
+            base_result = result_A if result_A.get('success') else result_B
+            final_response = {
+                'success': True, 'ticker': ticker,
+                'training_period': base_result.get('training_period'),
+                'results': combined_results
+            }
+            # --- 核心邏輯結束 ---
+
+            # 3. 訓練完成，儲存最終結果
+            with results_lock:
+                task_results[task_id].update({
+                    'status': 'SUCCESS',
+                    'result': final_response,
+                    'end_time': time.time()
+                })
+            logger.info(f"✅ [Worker Thread] 任務 {task_id} 成功完成。")
+
+        except Exception as e:
+            logger.error(f"❌ [Worker Thread] 任務 {task_id} 執行失敗: {e}", exc_info=True)
+            # 發生錯誤，儲存錯誤訊息
+            with results_lock:
+                task_results[task_id].update({
+                    'status': 'FAILURE',
+                    'result': f'背景任務執行失敗: {str(e)}',
+                    'end_time': time.time()
+                })
+        finally:
+            # 告訴佇列這個任務已經處理完畢
+            task_queue.task_done()
+# 【新增程式碼 END】
+
 def log_new_ticker_to_csv(ticker: str, market: str):
     """
     檢查並記錄新的股票代號到對應的 CSV 檔案中。(穩健版)
@@ -154,8 +274,10 @@ def log_new_ticker_to_csv(ticker: str, market: str):
         # 讀取現有代號以避免重複
         if file_exists and os.path.getsize(filepath) > 0:
             try:
+                # 使用 utf-8-sig 來處理可能存在的 BOM
                 df = pd.read_csv(filepath, encoding='utf-8-sig')
                 if header_name in df.columns:
+                    # 清理可能的前後空白
                     existing_tickers = set(df[header_name].astype(str).str.strip())
             except pd.errors.EmptyDataError:
                 logger.warning(f"[Ticker Logging] CSV 檔案 '{filepath}' 為空。")
@@ -845,7 +967,7 @@ class SingleStockTrainer:
             return None, f"載入數據失敗: {str(e)}"
 
     def apply_fixed_and_custom_params(self, system_type, custom_weights, basic_params):
-        """應用固定參數和自定義權重到GA參數"""
+        """應用固定參數和自定義權重到GA參數 - (修正版：同步最小交易次數)"""
         if system_type == 'A':
             config = self.system_a_config.copy()
         else:
@@ -853,13 +975,31 @@ class SingleStockTrainer:
         
         config.update(self.fixed_params)
         
+        # 處理使用者可調整的基礎參數
         if 'generations' in basic_params:
             config['generations'] = max(5, min(100, int(basic_params['generations'])))
         if 'population_size' in basic_params:
             config['population_size'] = max(20, min(200, int(basic_params['population_size'])))
+            
+        # --- ✨ 修正點 START ---
+        # 確保使用者設定的 'min_trades' 同時更新軟性懲罰和 NSGA-II 的硬性約束
         if 'min_trades' in basic_params:
-            config['min_trades_for_full_score'] = max(1, min(20, int(basic_params['min_trades'])))
+            # 1. 從前端獲取並驗證交易次數值，確保其在合理範圍內
+            user_min_trades = max(1, min(20, int(basic_params['min_trades'])))
+            
+            # 2. 更新用於適應度函數（Fitness Function）的「軟性懲罰」參數
+            #    這個參數決定了交易次數不足時，總回報的懲罰力度。
+            config['min_trades_for_full_score'] = user_min_trades
+            
+            # 3. 更新用於 NSGA-II 演算法的「硬性約束」參數
+            #    這個參數告訴演算法，交易次數少於此值的解是「無效」的，應盡力避免。
+            config['min_required_trades'] = user_min_trades
+            
+            # 為了方便偵錯，可以加上日誌輸出
+            logger.info(f"[Config Update] 最小交易次數已嚴格設定為: {user_min_trades} (同步更新懲罰與約束)")
+        # --- ✨ 修正點 END ---
         
+        # 設定 NSGA-II 的選擇方法和自定義權重
         config['nsga2_selection_method'] = 'custom_balance'
         config['custom_weights'] = custom_weights
         
@@ -1108,10 +1248,10 @@ class SingleStockTrainer:
         recent_sell_signal = last_sell_date if last_sell_date and last_sell_date >= seven_days_ago else None
         
         if recent_buy_signal and (not recent_sell_signal or recent_buy_signal >= recent_sell_signal):
-            return f"注意：{recent_buy_signal.strftime('%Y/%m/%d')} 有近期買入訊號！"
+            return f"注意：{recent_buy_signal.strftime('%Y/%m/%d')} 有買入訊號！"
         
         if recent_sell_signal and (not recent_buy_signal or recent_sell_signal > recent_buy_signal):
-            return f"注意：{recent_sell_signal.strftime('%Y/%m/%d')} 有近期賣出訊號！"
+            return f"注意：{recent_sell_signal.strftime('%Y/%m/%d')} 有賣出訊號！"
         
         # 2. 如果沒有近期信號，判斷長期持有狀態
         if last_buy_date and (not last_sell_date or last_buy_date > last_sell_date):
@@ -1127,8 +1267,6 @@ class SingleStockTrainer:
     def run_training(self, ticker, start_date, end_date, system_type, custom_weights, basic_params, num_runs=10):
         """執行訓練 - (效能優化版：只為Top 3生成圖表)"""
         try:
-            
-            
             errors = self.validate_inputs(ticker, start_date, end_date, system_type)
             if errors: 
                 return {'success': False, 'errors': errors}
@@ -1146,7 +1284,6 @@ class SingleStockTrainer:
             strategy_pool = []
             logger.info(f"開始為 {ticker} 執行 {num_runs} 次系統{system_type} NSGA-II優化 (高效模式)...")
             
-            # <<<<<<< 效能優化點 1：迴圈內不再生成圖表 >>>>>>>
             for run_idx in range(num_runs):
                 try:
                     runner_func = genetic_algorithm_unified if system_type == 'A' else genetic_algorithm_unified_b
@@ -1158,7 +1295,6 @@ class SingleStockTrainer:
                         if not metrics: 
                             continue
                         
-                        # 只儲存核心數據，不進行耗時的圖表生成
                         strategy_pool.append({
                             'gene': gene,
                             'fitness': metrics.get('total_return', 0),
@@ -1172,16 +1308,13 @@ class SingleStockTrainer:
             if not strategy_pool: 
                 return {'success': False, 'errors': ['所有訓練運行都失敗了']}
             
-            # 排序並選出最佳策略
             strategy_pool.sort(key=lambda x: x['fitness'], reverse=True)
             top_3 = strategy_pool[:3]
             
             results = []
             logger.info(f"訓練完成，開始為 Top {len(top_3)} 策略生成圖表...")
 
-            # <<<<<<< 效能優化點 2：只為 Top 3 生成圖表 >>>>>>>
             for i, strategy in enumerate(top_3):
-                # 在這裡才生成圖表，大大減少了 I/O 操作
                 portfolio_values, buy_signals, sell_signals = self.generate_trading_signals(
                     strategy['gene'], data_result, ga_config, system_type
                 )
@@ -1197,6 +1330,10 @@ class SingleStockTrainer:
                 formatter_func = format_ga_gene_parameters_to_text if system_type == 'A' else format_gene_parameters_to_text_b
                 description = formatter_func(strategy['gene'])
                 
+                # --- 【快取破壞修正 START】 ---
+                cache_buster = f"?v={int(time.time())}"
+                # --- 【快取破壞修正 END】 ---
+                
                 results.append({
                     'rank': i + 1,
                     'gene': strategy['gene'],
@@ -1204,8 +1341,10 @@ class SingleStockTrainer:
                     'metrics': strategy['metrics'],
                     'description': description,
                     'run_number': strategy['run'],
-                    'chart_image_url': chart_image_url,
-                    'chart_interactive_url': chart_interactive_url,
+                    # --- 【快取破壞修正 START】 ---
+                    'chart_image_url': f"{chart_image_url}{cache_buster}" if chart_image_url else None,
+                    'chart_interactive_url': f"{chart_interactive_url}{cache_buster}" if chart_interactive_url else None,
+                    # --- 【快取破壞修正 END】 ---
                     'buy_signals_count': len(buy_signals or []),
                     'sell_signals_count': len(sell_signals or [])
                 })
@@ -1230,8 +1369,6 @@ class SingleStockTrainer:
     def run_manual_backtest(self, ticker, gene, duration_months):
         """執行手動回測 - (修改版：生成圖片和HTML URL)"""
         try:
-            
-            
             system_type = 'A' if len(gene) in range(27, 29) else 'B' if len(gene) in range(9, 11) else None
             if not system_type: 
                 return {'success': False, 'error': f"無法識別的基因長度: {len(gene)}"}
@@ -1256,7 +1393,6 @@ class SingleStockTrainer:
             
             portfolio_values, buy_signals, sell_signals = self.generate_trading_signals(gene, data_result, ga_config, system_type)
             
-            # <<<<<<< 變更點：呼叫新的圖表生成函式 >>>>>>>
             chart_image_url, chart_interactive_url = create_backtest_chart_assets(
                 ticker, f"System{system_type}", "Manual",
                 portfolio_values, data_result['prices'], data_result['dates'],
@@ -1265,13 +1401,18 @@ class SingleStockTrainer:
             
             signal_status = self.analyze_signal_status(buy_signals, sell_signals)
             
-            # <<<<<<< 變更點：在回傳的字典中包含 URL >>>>>>>
+            # --- 【快取破壞修正 START】 ---
+            cache_buster = f"?v={int(time.time())}"
+            # --- 【快取破壞修正 END】 ---
+
             return {
                 'success': True, 'ticker': ticker, 'system_type_detected': f'系統 {system_type}',
                 'backtest_period': f"{start_date_str} ~ {end_date_str}",
                 'metrics': metrics, 
-                'chart_image_url': chart_image_url, 
-                'chart_interactive_url': chart_interactive_url, 
+                # --- 【快取破壞修正 START】 ---
+                'chart_image_url': f"{chart_image_url}{cache_buster}" if chart_image_url else None, 
+                'chart_interactive_url': f"{chart_interactive_url}{cache_buster}" if chart_interactive_url else None, 
+                # --- 【快取破壞修正 END】 ---
                 'signal_status': signal_status
             }
             
@@ -1313,7 +1454,7 @@ if not FINBERT_AVAILABLE:
 @app.route('/')
 def home():
     """原始市場分析儀表板首頁"""
-    return render_template('index.html')
+    return redirect(url_for('trainer_page'))
 
 # === 從 stock_ga_web.py 移植：策略訓練平台路由 ===
 @app.route('/trainer')
@@ -1392,101 +1533,93 @@ def user_status():
 @login_required
 def api_train():
     """
-    (新版) 訓練API端點 - 自動化訓練系統A和系統B，並回傳各自的最佳策略
+    (新版) 訓練API端點 - 接收請求，產生任務ID，並將任務放入佇列。
     """
     if not ENGINES_IMPORTED:
         return jsonify({'success': False, 'errors': ['遺傳算法引擎未正確載入']}), 500
     
     try:
+        # --- 這部分參數獲取和驗證邏輯保持不變 ---
         data = request.json
         ticker = data.get('ticker', '').strip().upper()
         start_date = data.get('start_date')
         end_date = data.get('end_date')
         custom_weights = data.get('custom_weights', trainer.default_custom_weights)
         
-        # <<<< 修改點 1: 後端定義固定的訓練參數 >>>>
-        # 從前端獲取用戶唯一能設定的 min_trades
+        logger.info(f"Validating ticker '{ticker}' and checking if it needs to be added to lists...")
+        analyzer = EnhancedStockAnalyzer(ticker)
+        stock_data = analyzer.get_basic_stock_data()
+        
+        if not stock_data.get("success"):
+            return jsonify({'success': False, 'errors': [stock_data.get('error', 'Invalid ticker')]}), 400
+        
+        validated_ticker = stock_data['ticker']
+        market = stock_data['market']
+        log_new_ticker_to_csv(validated_ticker, market)
+        
         basic_params_from_user = data.get('basic_params', {})
-        
-        # 將固定的參數與用戶設定的參數合併
         fixed_basic_params = {
-            'generations': 15,       # 固定世代數
-            'population_size': 50,   # 固定族群大小
-            'min_trades': int(basic_params_from_user.get('min_trades', 4)) # 保留用戶設定
+            'min_trades': int(basic_params_from_user.get('min_trades', 4))
         }
-        fixed_num_runs = 15 # 固定訓練次數
+        # --- 驗證邏輯結束 ---
 
-        logger.info(f"收到簡化版訓練請求: {ticker} ({start_date} to {end_date})")
-        logger.info(f"將使用固定參數: {fixed_basic_params}，訓練 {fixed_num_runs} 次")
-
-        # <<<< 修改點 2: 依序執行系統 A 和 B 的訓練 >>>>
-        # 訓練系統 A
-        logger.info("--- 開始訓練系統 A ---")
-        result_A = trainer.run_training(
-            ticker=ticker, start_date=start_date, end_date=end_date,
-            system_type='A',
-            custom_weights=custom_weights,
-            basic_params=fixed_basic_params,
-            num_runs=fixed_num_runs
-        )
+        # === 核心修改：從 "執行任務" 改為 "提交任務" ===
         
-        # 訓練系統 B
-        logger.info("--- 開始訓練系統 B ---")
-        result_B = trainer.run_training(
-            ticker=ticker, start_date=start_date, end_date=end_date,
-            system_type='B',
-            custom_weights=custom_weights,
-            basic_params=fixed_basic_params,
-            num_runs=fixed_num_runs
-        )
+        # 1. 產生一個唯一的任務 ID
+        task_id = str(uuid.uuid4())
 
-        # <<<< 修改點 3: 合併兩個系統的最佳結果 >>>>
-        combined_results = []
+        # 2. 將所有需要的資料打包成一個字典
+        task_data = {
+            'ticker': validated_ticker,
+            'start_date': start_date,
+            'end_date': end_date,
+            'custom_weights': custom_weights,
+            'basic_params': fixed_basic_params
+        }
         
-        # 提取系統 A 的最佳策略 (Rank 1)
-        if result_A.get('success') and result_A.get('results'):
-            strategy_A = result_A['results'][0]
-            strategy_A['rank'] = 1 # 重新排名為 1
-            # 新增一個欄位來標示策略類型，方便前端未來客製化顯示
-            strategy_A['strategy_type_name'] = '策略 1 ' 
-            combined_results.append(strategy_A)
-            logger.info("系統 A 訓練成功，已提取最佳策略。")
-        else:
-            logger.warning("系統 A 訓練失敗或無結果。")
-
-        # 提取系統 B 的最佳策略 (Rank 1)
-        if result_B.get('success') and result_B.get('results'):
-            strategy_B = result_B['results'][0]
-            strategy_B['rank'] = 2 # 重新排名為 2
-            strategy_B['strategy_type_name'] = '策略 2 '
-            combined_results.append(strategy_B)
-            logger.info("系統 B 訓練成功，已提取最佳策略。")
-        else:
-            logger.warning("系統 B 訓練失敗或無結果。")
-            
-        # <<<< 修改點 4: 處理訓練失敗的情況並回傳合併後的結果 >>>>
-        if not combined_results:
-            # 如果兩個系統都失敗，回傳一個綜合的錯誤訊息
-            error_A = result_A.get('errors', ['未知錯誤'])[0] if not result_A.get('success') else '無有效策略'
-            error_B = result_B.get('errors', ['未知錯誤'])[0] if not result_B.get('success') else '無有效策略'
-            return jsonify({'success': False, 'errors': [f"所有訓練均失敗。系統A: {error_A} | 系統B: {error_B}"]})
-
-        # 使用任一成功結果的元數據來建立最終的回傳物件
-        base_result = result_A if result_A.get('success') else result_B
+        # 3. 將 (任務ID, 任務資料) 這個組合放入佇列
+        task_queue.put((task_id, task_data))
         
-        final_response = {
+        # 4. 在結果字典中，為這個新任務建立一個初始狀態 "排隊中"
+        with results_lock:
+            task_results[task_id] = {'status': 'QUEUED'}
+        
+        # 5. 立刻返回 202 Accepted 回應，告訴前端任務已提交
+        logger.info(f"📥 訓練任務已加入佇列，ID: {task_id}。目前佇列大小: {task_queue.qsize()}")
+        return jsonify({
             'success': True,
-            'ticker': base_result.get('ticker'),
-            'training_period': base_result.get('training_period'),
-            'results': combined_results
-        }
-        
-        logger.info(f"訓練完成，將回傳 {len(combined_results)} 個最佳策略。")
-        return jsonify(final_response)
+            'message': '訓練任務已成功提交，正在排隊等候執行。',
+            'task_id': task_id,
+            # 我們不再需要 status_url，因為前端可以直接構建 URL
+        }), 202
 
     except Exception as e:
         logger.error(f"API錯誤 /api/train: {e}", exc_info=True)
         return jsonify({'success': False, 'errors': [f'API伺服器錯誤: {str(e)}']}), 500
+# 【修改/替換程式碼 END】
+
+# 【新增程式碼 START】
+# 在 /api/train 之後，新增這個用於狀態查詢的 API
+@app.route('/api/task_status/<string:task_id>')
+@login_required
+def get_task_status(task_id):
+    """查詢內建任務系統的狀態和結果。"""
+    with results_lock:
+        # 從結果字典中安全地獲取任務資訊
+        task = task_results.get(task_id, {})
+    
+    # 如果任務完成(成功或失敗)，我們才返回結果，否則 result 為 null
+    result_payload = None
+    if task.get('status') in ['SUCCESS', 'FAILURE']:
+        result_payload = task.get('result')
+
+    response = {
+        'task_id': task_id,
+        'status': task.get('status', 'NOT_FOUND'), # 如果 task_id 不存在，返回 NOT_FOUND
+        'result': result_payload
+    }
+    return jsonify(response)
+# 【新增程式碼 END】
 
 @app.route('/api/manual-backtest', methods=['POST'])
 @login_required
@@ -1525,9 +1658,9 @@ def save_strategy():
         sql = """
         INSERT INTO saved_strategies (
             user_id, ticker, train_start_date, train_end_date, gene,
-            win_rate, total_return, trade_count, avg_trade_return, max_drawdown,
+            win_rate, total_return, trade_count, avg_trade_return, max_drawdown, sharpe_ratio,
             max_trade_extremes, strategy_details
-        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         """
         
         args = (
@@ -1541,7 +1674,8 @@ def save_strategy():
             metrics.get('trade_count', 0),
             metrics.get('average_trade_return', 0.0),
             metrics.get('max_drawdown', 0.0),
-            f"{metrics.get('max_trade_drop_pct', 0.0):.2f}% / {metrics.get('max_trade_gain_pct', 0.0):.2f}%",
+            metrics.get('sharpe_ratio', 0.0),  # <--- 新增這一行
+            f"{metrics.get('max_trade_gain_pct', 0.0):.2f}% / {metrics.get('max_trade_drop_pct', 0.0):.2f}%", 
             data.get('strategy_details', '')
         )
         
@@ -1599,6 +1733,40 @@ def delete_strategy(strategy_id):
     except Exception as e:
         logger.error(f"刪除策略時發生錯誤: {e}", exc_info=True)
         return jsonify({'success': False, 'message': f'伺服器錯誤: {e}'}), 500
+
+@app.route('/api/strategies/batch-delete', methods=['DELETE'])
+@login_required
+def batch_delete_strategies():
+    """批次刪除多個指定的策略"""
+    try:
+        data = request.get_json()
+        strategy_ids = data.get('strategy_ids')
+
+        # 驗證輸入
+        if not strategy_ids or not isinstance(strategy_ids, list):
+            return jsonify({'success': False, 'message': '無效的請求，未提供策略 ID 清單'}), 400
+        
+        # 確保所有 ID 都是數字，增加安全性
+        if not all(isinstance(sid, int) for sid in strategy_ids):
+            return jsonify({'success': False, 'message': '無效的策略 ID 格式'}), 400
+
+        # 創建對應數量的佔位符
+        placeholders = ', '.join(['%s'] * len(strategy_ids))
+        
+        # 建立 SQL 查詢，確保只刪除屬於當前使用者的策略
+        sql = f"DELETE FROM saved_strategies WHERE id IN ({placeholders}) AND user_id = %s"
+        
+        # 準備參數，將 user_id 放在最後
+        params = tuple(strategy_ids) + (current_user.id,)
+        
+        rowcount = execute_db_query(sql, params)
+        
+        return jsonify({'success': True, 'message': f'已成功刪除 {rowcount} 個策略'})
+
+    except Exception as e:
+        logger.error(f"批次刪除策略時發生錯誤: {e}", exc_info=True)
+        return jsonify({'success': False, 'message': f'伺服器錯誤: {str(e)}'}), 500
+    
 # ==============================================================================
 # >>> 新增：資金配置 API 端點 <<<
 # ==============================================================================
@@ -1692,139 +1860,367 @@ def _build_allocation_prompt(risk_profile, strategies_data):
     
     return prompt
 
+def _build_new_gemini_prompt(tickers_list):
+    """
+    為我們的量化模型，生成一個專注於市場分析的 Gemini Prompt。
+    """
+    unique_tickers = sorted(list(set(tickers_list)))
+
+    prompt = f"""你是頂尖的金融市場分析師。請基於最新的市場資訊，為以下股票清單提供簡潔的質化分析。
+
+**分析目標股票:**
+
+{json.dumps(unique_tickers, indent=2)}
+
+**任務:**
+
+1. 使用 Google Search 搜尋每支股票最近一個月的重大新聞、財報表現、分析師評級變化。
+
+2. 判斷每支股票當前的市場情緒和短期（未來1-3個月）的潛在催化劑或風險。
+
+**輸出格式:**
+
+請嚴格按照以下 JSON 格式回覆，不要有任何額外文字或 markdown。
+
+{{
+
+"analysis": [
+
+{{
+
+"ticker": "股票代號",
+
+"sentiment": "用 'Bullish', 'Neutral', 'Bearish' 三個詞之一來描述",
+
+"summary": "一句話總結其當前的市場地位和短期展望 (30-50字、使用繁體中文)。"
+
+}}
+
+],
+
+"overall_summary": "對這幾支股票所在的市場板塊或整體市場氛圍的簡短總結 (50-70字、使用繁體中文)。"
+
+}}
+
+**重要提醒：**
+
+- `summary` 內容必須簡潔、精準。
+
+- 最終的輸出內容中，絕對不能包含任何方括號 `[]` 加上數字的引文標記。
+
+"""
+
+    return prompt
+
+
+def calculate_annualized_return(total_return, start_date_str, end_date_str):
+    """根據總報酬率和起訖日期，計算年化報酬率 (CAGR)。"""
+    try:
+        # 確保日期是字串格式
+        start_date = datetime.strptime(str(start_date_str), '%Y-%m-%d')
+        end_date = datetime.strptime(str(end_date_str), '%Y-%m-%d')
+        
+        days = (end_date - start_date).days
+        if days <= 30: # 如果訓練期太短，年化意義不大，直接返回0或總報酬
+            return total_return 
+
+        number_of_years = days / 365.25
+        if number_of_years <= 0: return 0.0
+
+        ending_value = 1 + float(total_return)
+        # 處理 total_return 是負數的情況
+        if ending_value < 0:
+            return -1.0 # 如果虧到本金都沒了，年化是負無窮，返回-100%
+
+        annualized_rate = (ending_value ** (1 / number_of_years)) - 1
+        return annualized_rate
+    except (ValueError, TypeError, AttributeError):
+        # 如果日期格式錯誤或無效，返回一個安全的0.0
+        return 0.0
+
+def assign_portfolio_roles(strategies_data):
+    """
+    根據策略的分數，分配「核心增長」、「穩定基石」、「衛星配置」的角色。
+    
+    Args:
+        strategies_data: 包含每個策略所有數據的列表，每個元素是一個字典，
+                         必須包含 'ticker', 'final_adjusted_score', 'stability_score'。
+                                     
+    Returns:
+        一個字典，鍵是 ticker，值是分配的角色字串。
+    """
+    if not strategies_data:
+        return {}
+
+    # 處理只有一個策略的情況
+    if len(strategies_data) == 1:
+        return {strategies_data[0]['ticker']: '核心增長'}
+
+    # 按 final_adjusted_score 降序排序
+    strategies_sorted = sorted(strategies_data, key=lambda x: x['final_adjusted_score'], reverse=True)
+    
+    # 1. 指定「核心增長」
+    core_growth_strategy = strategies_sorted[0]
+    roles = {core_growth_strategy['ticker']: '核心增長'}
+    
+    # 2. 在剩餘策略中，找出「穩定基石」
+    remaining_strategies = [s for s in strategies_data if s['ticker'] != core_growth_strategy['ticker']]
+    
+    if remaining_strategies:
+        stable_cornerstone_strategy = max(remaining_strategies, key=lambda x: x['stability_score'])
+        roles[stable_cornerstone_strategy['ticker']] = '穩定基石'
+
+    # 3. 其餘的都是「衛星配置」
+    for strategy in strategies_data:
+        if strategy['ticker'] not in roles:
+            roles[strategy['ticker']] = '衛星配置'
+            
+    return roles
 
 @app.route('/api/capital-allocation', methods=['POST'])
 @login_required
 def api_capital_allocation():
-    """處理資金配置請求的 API 端點 - 經過兩輪除錯的穩健版本"""
     try:
-        # 1. 接收並驗證前端傳來的數據
+        ### 步驟 1-3: 獲取原料、指標升級與數據正規化 (保持不變) ###
         data = request.get_json()
         strategy_ids = data.get('strategy_ids')
         risk_profile = data.get('risk_profile')
 
-        if not isinstance(strategy_ids, list) or not strategy_ids or not risk_profile:
+        if not all([strategy_ids, risk_profile]):
             return jsonify({'success': False, 'message': '無效的請求參數'}), 400
-        
-        if not gemini_client:
-            return jsonify({'success': False, 'message': 'Gemini AI 服務未配置'}), 503
 
-        # 2. 從資料庫查詢被選中策略的詳細數據
         placeholders = ', '.join(['%s'] * len(strategy_ids))
         sql = f"""
-            SELECT id, ticker, total_return, avg_trade_return, win_rate, max_drawdown, max_trade_extremes 
-            FROM saved_strategies 
-            WHERE id IN ({placeholders}) AND user_id = %s
+        SELECT id, ticker, total_return, sharpe_ratio, max_drawdown, win_rate,
+               train_start_date, train_end_date
+        FROM saved_strategies
+        WHERE id IN ({placeholders}) AND user_id = %s
         """
         params = tuple(strategy_ids) + (current_user.id,)
         strategies_from_db = execute_db_query(sql, params, fetch_all=True)
 
-        if not strategies_from_db or len(strategies_from_db) != len(strategy_ids):
-             return jsonify({'success': False, 'message': '找不到部分或全部策略，請刷新後再試'}), 404
+        if not strategies_from_db:
+            return jsonify({'success': False, 'message': '找不到策略'}), 404
 
-        # 3. 構建給 Gemini 的 Prompt (依賴已修正的 _build_allocation_prompt)
-        prompt_text = _build_allocation_prompt(risk_profile, strategies_from_db)
-        logger.info(f"為使用者 {current_user.id} 生成的資金配置 Prompt 已建立。")
+        ### 步驟 2: 指標升級與數據處理 ###
+        processed_strategies = [{
+            'id': s['id'], 'ticker': s['ticker'],
+            'annualized_return': calculate_annualized_return(s['total_return'], s['train_start_date'], s['train_end_date']),
+            'sharpe_ratio': float(s.get('sharpe_ratio', 0.0)),
+            'max_drawdown': float(s.get('max_drawdown', 0.0)),
+            'win_rate': float(s.get('win_rate', 0.0))
+        } for s in strategies_from_db]
 
-        # 4. 調用 Gemini API
-        config = genai_types.GenerateContentConfig(
-            temperature=0.3,
-            max_output_tokens=20000,
-            tools=[genai_types.Tool(google_search=genai_types.GoogleSearch())],
-            safety_settings=safety_settings_gemini
-        )
-        
-        response = gemini_client.models.generate_content(
-            model='models/gemini-2.5-flash',
-            contents=prompt_text,
-            config=config
-        )
+        ### 步驟 3: 數據正規化 ###
+        metrics_to_normalize = ['annualized_return', 'sharpe_ratio', 'max_drawdown', 'win_rate']
+        for metric in metrics_to_normalize:
+            values = [s[metric] for s in processed_strategies if s.get(metric) is not None]
+            if not values: continue
+            min_val, max_val = min(values), max(values)
+            for s in processed_strategies:
+                value = s.get(metric)
+                norm_key = f'norm_{metric}'
+                if value is None or max_val == min_val:
+                    s[norm_key] = 50.0; continue
+                if metric == 'max_drawdown':
+                    s[norm_key] = 100 * (max_val - value) / (max_val - min_val)
+                else:
+                    s[norm_key] = 100 * (value - min_val) / (max_val - min_val)
 
-        # 5. 強化的回應處理 (核心修正)
-        logger.info(f"Gemini API 回應類型: {type(response)}")
-        response_text = None
+        ### 步驟 4 & 5: AI 洞察 & 混合模型合成 ###
+        weights = WEIGHTS.get(risk_profile, WEIGHTS['均衡型'])
+        tickers_list = list(set([s['ticker'] for s in processed_strategies]))
 
-        # 檢查是否有因 Prompt 本身的問題而被阻擋
-        if response.prompt_feedback and response.prompt_feedback.block_reason:
-            block_reason_str = str(response.prompt_feedback.block_reason)
-            logger.error(f"❌ 請求被阻擋！原因: {block_reason_str}")
-            return jsonify({
-                'success': False,
-                'message': f'AI 分析請求被安全策略阻擋，原因: {block_reason_str}。請嘗試調整策略描述或風險偏好。'
-            }), 400
+        # --- 修正的 Gemini API 調用 ---
+        gemini_analysis = {"analysis": [], "overall_summary": "AI市場總結生成中..."}
+        if gemini_client and tickers_list:
+            try:
+                prompt_text = _build_new_gemini_prompt(tickers_list)
+                config = genai_types.GenerateContentConfig(
+                    temperature=0.3, 
+                    tools=[genai_types.Tool(google_search=genai_types.GoogleSearch())]
+                )
+                
+                # 修正的 API 調用
+                response = gemini_client.models.generate_content(
+                    model='models/gemini-2.5-flash',
+                    contents=prompt_text,
+                    config=config
+                )
+                
+                # 檢查響應是否有效
+                if response and hasattr(response, 'text') and response.text:
+                    # <--- ✨ 修正點 START ---
+                    # 先移除頭尾可能存在的 Markdown 標籤和空白
+                    cleaned_text = response.text.strip()
+                    if cleaned_text.startswith('```json'):
+                        cleaned_text = cleaned_text[7:] # 移除 '```json'
+                    if cleaned_text.endswith('```'):
+                        cleaned_text = cleaned_text[:-3] # 移除結尾的 '```'
+                    cleaned_text = cleaned_text.strip() # 再次清理空白
+                    # <--- ✨ 修正點 END ---
+                    
+                    # 檢查清理後的文本是否為空
+                    if cleaned_text:
+                        try:
+                            gemini_analysis = json.loads(cleaned_text)
+                            logger.info(f"成功解析 Gemini 響應: {len(gemini_analysis.get('analysis', []))} 支股票分析")
+                        except json.JSONDecodeError as json_err:
+                            logger.error(f"JSON 解析失敗: {json_err}")
+                            logger.error(f"原始響應內容: {cleaned_text[:200]}...")
+                            gemini_analysis = {"analysis": [], "overall_summary": "AI市場分析解析失敗。"}
+                    else:
+                        logger.warning("Gemini API 返回空內容")
+                        gemini_analysis = {"analysis": [], "overall_summary": "AI市場分析返回空內容。"}
+                else:
+                    logger.warning("Gemini API 返回無效響應")
+                    gemini_analysis = {"analysis": [], "overall_summary": "AI市場分析返回無效響應。"}
+                    
+            except Exception as gemini_err:
+                logger.error(f"Gemini API 調用失敗: {gemini_err}")
+                gemini_analysis = {"analysis": [], "overall_summary": "AI市場分析暫時無法使用。"}
 
-        # 嘗試從 response.text 直接獲取 (最簡單的情況)
-        if hasattr(response, 'text') and response.text:
-            response_text = response.text.strip()
-            logger.info("✅ 使用 response.text 成功獲取回應")
-        # 如果不行，深入挖掘 candidates
-        elif hasattr(response, 'candidates') and response.candidates:
-            candidate = response.candidates[0] # 通常只關心第一個候選項
+        ### 步驟 6-8: 計算最終分數、分配角色、打包結果 (保持不變) ###
+        for s in processed_strategies:
+            s['quant_score'] = (s.get('norm_annualized_return', 50) * weights['annualized_return'] +
+                              s.get('norm_sharpe_ratio', 50) * weights['sharpe_ratio'] +
+                              s.get('norm_max_drawdown', 50) * weights['max_drawdown'] +
+                              s.get('norm_win_rate', 50) * weights['win_rate'])
+            s['stability_score'] = (s.get('norm_max_drawdown', 50) * 0.6) + (s.get('norm_win_rate', 50) * 0.4)
             
-            # 檢查完成原因，這是判斷是否被安全攔截的關鍵
-            finish_reason_str = str(candidate.finish_reason) if hasattr(candidate, 'finish_reason') else 'UNKNOWN'
-            if finish_reason_str.upper() != 'STOP':
-                 logger.warning(f"⚠️ Gemini 回應的完成原因並非 'STOP', 而是 '{finish_reason_str}'。這通常表示內容因安全或其他原因被攔截。")
-                 if finish_reason_str.upper() == 'SAFETY':
-                     return jsonify({
-                         'success': False, 
-                         'message': 'AI 生成的內容因觸發安全策略而被攔截。請稍後重試或調整請求。'
-                     }), 500
+            ticker_analysis = next((item for item in gemini_analysis.get('analysis', []) if item['ticker'] == s['ticker']), None)
+            sentiment = ticker_analysis['sentiment'] if ticker_analysis else 'Neutral'
+            ai_factor = AI_ADJUSTMENT_FACTORS.get(sentiment, 1.0)
+            s['final_adjusted_score'] = s['quant_score'] * ai_factor
+            s['ai_summary'] = ticker_analysis['summary'] if ticker_analysis else "無即時市場分析。"
 
-            # 如果完成原因是正常的，再嘗試解析內容
-            if hasattr(candidate, 'content') and candidate.content.parts:
-                response_text = "".join(part.text for part in candidate.content.parts if hasattr(part, 'text')).strip()
-                if response_text:
-                    logger.info("✅ 從 candidate.content.parts 成功組合回應")
+        portfolio_roles = assign_portfolio_roles(processed_strategies)
 
-        if not response_text:
-            logger.error("❌ 無法從 Gemini API 獲取任何文本內容。可能是因為安全攔截或空回應。")
-            logger.error(f"原始回應物件詳情: {response}") # 記錄下整個物件以供分析
-            return jsonify({
-                'success': False, 
-                'message': 'AI 服務返回了空的回應，可能因內容審核被攔截，請稍後再試。'
-            }), 500
+        total_score = sum(s['final_adjusted_score'] for s in processed_strategies)
+        final_allocations, running_total = [], 0
+        if total_score > 0:
+            for i, s in enumerate(sorted(processed_strategies, key=lambda x: x['final_adjusted_score'], reverse=True)):
+                if i == len(processed_strategies) - 1:
+                    percentage = 100 - running_total
+                else:
+                    percentage = round((s['final_adjusted_score'] / total_score) * 100)
+                running_total += percentage
+                final_allocations.append({'ticker': s['ticker'], 'percentage': percentage})
 
-        logger.info(f"獲取到的回應長度: {len(response_text)}")
-        logger.info(f"回應前200字符: {response_text[:200]}...")
+        reasoning = {
+            "overall_summary": gemini_analysis.get("overall_summary", "AI市場總結生成失敗。"),
+            "per_stock_analysis": [{
+                "ticker": s['ticker'],
+                "role_in_portfolio": portfolio_roles.get(s['ticker']),
+                "justification": s['ai_summary']
+            } for s in processed_strategies]
+        }
 
-        # 6. 智能 JSON 解析
-        try:
-            cleaned_text = response_text.replace('```json', '').replace('```', '').strip()
-            json_start = cleaned_text.find('{')
-            json_end = cleaned_text.rfind('}') + 1
-            
-            if json_start >= 0 and json_end > json_start:
-                json_text = cleaned_text[json_start:json_end]
-                parsed_response = json.loads(json_text)
-                
-                # 驗證必要欄位
-                if 'allocations' not in parsed_response or not isinstance(parsed_response['allocations'], list):
-                    raise ValueError("回應中缺少 'allocations' 陣列")
-                
-                total_percentage = sum(item.get('percentage', 0) for item in parsed_response['allocations'])
-                if not (95 <= total_percentage <= 105):
-                    logger.warning(f"AI 配置總和為 {total_percentage}%，偏離100%較多")
-                
-                if 'reasoning' not in parsed_response:
-                    parsed_response['reasoning'] = "AI已完成分析，但未提供詳細說明"
-                
-                logger.info("✅ JSON 解析成功")
-                return jsonify({'success': True, 'data': parsed_response})
-            else:
-                raise ValueError("在回應中找不到有效的JSON結構")
-
-        except (json.JSONDecodeError, ValueError) as e:
-            logger.error(f"JSON 解析失敗: {e}")
-            logger.error(f"原始回應: {response_text}")
-            return jsonify({
-                'success': False, 
-                'message': f'AI 回應格式異常，原始回應: {response_text[:300]}...',
-                'raw_response': response_text
-            }), 500
+        final_data = {"allocations": final_allocations, "reasoning": reasoning}
+        return jsonify({"success": True, "data": final_data})
 
     except Exception as e:
         logger.error(f"資金配置 API 發生嚴重錯誤: {e}", exc_info=True)
+        return jsonify({'success': False, 'message': f'伺服器內部錯誤: {str(e)}'}), 500
+    
+
+@app.route('/api/lookup-strategy', methods=['GET'])
+@login_required
+def api_lookup_strategy():
+    """
+    查詢資料庫中已存在的、針對特定股票的最佳策略 (系統A和系統B的Rank 1)。
+    """
+    try:
+        ticker_query = request.args.get('ticker', '').strip().upper()
+        if not ticker_query:
+            return jsonify({'success': False, 'message': '請提供股票代號'}), 400
+
+        # --- 步驟 1: 使用 EnhancedStockAnalyzer 驗證並獲取標準化的股票代號 ---
+        # 這樣可以自動處理例如 "2330" -> "2330.TW" 的情況
+        analyzer = EnhancedStockAnalyzer(ticker_query)
+        stock_data = analyzer.get_basic_stock_data()
+        
+        if not stock_data.get("success"):
+            return jsonify({'success': False, 'message': f"無效的股票代號: {stock_data.get('error', '未知錯誤')}"}), 404
+
+        validated_ticker = stock_data['ticker']
+        logger.info(f"策略查詢: 使用者查詢 '{ticker_query}', 標準化為 '{validated_ticker}'")
+
+        # --- 步驟 2: 查詢資料庫 ---
+        sql_query = """
+            SELECT 
+                user_id, stock_ticker, strategy_rank, 
+                ai_strategy_gene AS gene, 
+                strategy_details, 
+                game_start_date AS train_start_date, 
+                game_end_date AS train_end_date,
+                period_return_pct,
+                win_rate_pct,
+                average_trade_return_pct,
+                max_drawdown_pct,
+                sharpe_ratio,              
+                total_trades,
+                max_trade_drop_pct,
+                max_trade_gain_pct
+            FROM ai_vs_user_games 
+            WHERE 
+                stock_ticker = %s AND 
+                strategy_rank = 1 AND 
+                user_id IN (2, 3)
+            ORDER BY 
+                user_id;
+        """
+        
+        found_strategies = execute_db_query(sql_query, (validated_ticker,), fetch_all=True)
+
+        if not found_strategies:
+            return jsonify({'success': True, 'found': False, 'message': f'資料庫中尚無 {validated_ticker} 的最佳策略。'})
+
+        # --- 步驟 3: 格式化返回的數據，使其與前端的數據結構一致 ---
+        results = []
+        for strategy in found_strategies:
+            # 將Decimal類型轉換為float，以確保JSON序列化正常
+            for key, value in strategy.items():
+                if isinstance(value, (datetime, date)):
+                    strategy[key] = value.isoformat().split('T')[0]
+                elif hasattr(value, 'to_eng_string'): # 處理Decimal
+                    strategy[key] = float(value.to_eng_string())
+            
+            # 將基因字串解析為JSON陣列
+            try:
+                strategy['gene'] = json.loads(strategy.get('gene', '[]'))
+            except (json.JSONDecodeError, TypeError):
+                strategy['gene'] = []
+
+            # 創建與前端 'metrics' 對應的嵌套對象
+            metrics = {
+                'total_return': strategy.get('period_return_pct', 0) / 100.0,
+                'win_rate_pct': strategy.get('win_rate_pct', 0),
+                'average_trade_return': strategy.get('average_trade_return_pct', 0) / 100.0,
+                'max_drawdown': strategy.get('max_drawdown_pct', 0) / 100.0,
+                'sharpe_ratio': strategy.get('sharpe_ratio', 0.0),  
+                'trade_count': strategy.get('total_trades', 0),
+                'max_trade_drop_pct': strategy.get('max_trade_drop_pct', 0),
+                'max_trade_gain_pct': strategy.get('max_trade_gain_pct', 0)
+            }
+            
+            # 構建與前端訓練結果卡片一致的數據結構
+            formatted_strategy = {
+                'strategy_type_name': '策略 1' if strategy['user_id'] == 2 else '策略 2',
+                'ticker': strategy['stock_ticker'],
+                'train_start_date': strategy['train_start_date'],
+                'train_end_date': strategy['train_end_date'],
+                'gene': strategy['gene'],
+                'strategy_details': strategy.get('strategy_details', ''), 
+                'metrics': metrics
+            }
+            results.append(formatted_strategy)
+
+        logger.info(f"成功為 {validated_ticker} 找到 {len(results)} 個最佳策略。")
+        return jsonify({'success': True, 'found': True, 'strategies': results})
+
+    except Exception as e:
+        logger.error(f"查詢策略API時發生錯誤: {e}", exc_info=True)
         return jsonify({'success': False, 'message': f'伺服器內部錯誤: {str(e)}'}), 500
 
 
@@ -2001,6 +2397,7 @@ def api_strategy_signals():
                 a.total_trades,
                 a.average_trade_return_pct,
                 a.max_drawdown_pct,
+                a.sharpe_ratio,
                 a.max_trade_drop_pct,
                 a.max_trade_gain_pct,
                 ROW_NUMBER() OVER(PARTITION BY bs.stock_ticker, bs.system_type ORDER BY bs.win_rate DESC, bs.return_pct DESC) as rn
@@ -2477,7 +2874,7 @@ class StrategyBacktesterWithSignals:
             days_diff = (today - s_date).days
             if 0 <= days_diff < self.signal_check_days:
                 day_str = {0: "今天", 1: "昨天"}.get(days_diff, f"{days_diff}天前")
-                recent.append(f"{day_str}({s_date})")
+                recent.append(f"({s_date})")
                 latest_price = signal['price']
         return (True, f"在 {', '.join(recent)} 檢測到{signal_type_text}信號", latest_price) if recent else (False, f"近期無{signal_type_text}信號", None)
 
@@ -2647,6 +3044,15 @@ if __name__ == '__main__':
 <body><h1>市場分析平台運行中</h1></body>
 </html>""")
     
+       # 【新增程式碼 START】
+    # --- 啟動我們的背景工作執行緒 ---
+    # 將執行緒設定為 daemon=True，這樣當主程式 (Flask app) 結束時，
+    # 這個背景執行緒也會自動跟著關閉，不會卡住。
+    logger.info("⚙️ 正在啟動背景訓練工作執行緒...")
+    worker_thread = threading.Thread(target=training_worker_function, daemon=True)
+    worker_thread.start()
+    # 【新增程式碼 END】
+
     # 設定並啟動排程器
     logger.info("⚙️ 正在設定排程器...")
     scheduler = BackgroundScheduler(timezone=pytz.timezone('Asia/Taipei'))
@@ -2692,4 +3098,3 @@ if __name__ == '__main__':
     # 在生產環境中應使用 WSGI 伺服器如 Gunicorn
     # debug 設為 False 是很重要的，因為 Flask 的自動重載器會導致排程任務被初始化兩次
     app.run(debug=False, host='0.0.0.0', port=5001)
-
