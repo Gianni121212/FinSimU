@@ -55,7 +55,7 @@ STRATEGY_CONFIG_B = {
     'adx_period': 14,
     'ma_short_period': 5,
     'ma_long_period': 10,
-    'commission_pct': 0.003,
+    'commission_pct': 0.005,
 }
 
 GA_PARAMS_CONFIG_B = {
@@ -1089,7 +1089,13 @@ def format_gene_parameters_to_text_b(gene):
         vix_threshold = gene[GENE_MAP_B['vix_threshold']]
         vix_ma_choice = gene[GENE_MAP_B['vix_ma_choice']]
         vix_ma_period = config['vix_ma_period_options'][vix_ma_choice]
-        regime_indicator_details = f"VIX {vix_ma_period}日均線"
+        
+        # 根據VIX的MA天期，決定顯示的文字
+        if vix_ma_period <= 2:
+            regime_indicator_details = "當日VIX值"
+        else:
+            regime_indicator_details = f"VIX {vix_ma_period}日均線"
+            
         regime_condition_desc = f"≥ {vix_threshold}"
         
         # 策略選擇
