@@ -561,61 +561,61 @@ class EnhancedStockAnalyzer:
                 "backtest_period_description": "回測期間：無法獲取" 
             }
 # 在 main_app.py 中新增這個函式
-# 在 main_app.py 中，找到並完整替換這個函式
+
+# 在 main_app.py 中，找到並用此【最終完美版】函式完整替換
 
 def create_backtest_chart_assets(ticker, system_type, rank, portfolio, prices, dates, buys, sells):
-    """為回測結果創建靜態PNG和互動HTML，並返回URL - (新增清晰圖例)"""
+    """為回測結果創建靜態PNG和互動HTML，並返回URL - (原版 + 隱藏工具列 + 懸停/座標軸日期格式化)"""
     try:
         fig = make_subplots(rows=2, cols=1, shared_xaxes=True, vertical_spacing=0.1, 
                           row_heights=[0.7, 0.3],
-                          subplot_titles=(f'{ticker} 價格走勢與交易信號', '投資組合價值變化'))
+                          subplot_titles=(f'{ticker} 價格走勢與交易信號', '價值變化'))
         
-        # 股價與買賣點
+        # 股價與買賣點 (已加入懸停格式)
         fig.add_trace(go.Scatter(
             x=dates, y=prices, mode='lines', name='收盤價', 
-            line=dict(color='rgba(102, 126, 234, 0.7)')
+            line=dict(color='rgba(102, 126, 234, 0.7)'),
+            hovertemplate='日期: %{x:%Y/%m/%d}<br>收盤價: %{y:.2f}<extra></extra>'
         ), row=1, col=1)
         
         if buys:
             fig.add_trace(go.Scatter(
                 x=[s['date'] for s in buys], y=[s['price'] for s in buys], 
-                mode='markers', 
-                # <<<<<<< 變更點 1: 為買入信號命名 >>>>>>>
-                name='買入信號', 
-                marker=dict(symbol='triangle-up', size=10, color='#27AE60', line=dict(width=1, color='white'))
+                mode='markers', name='買入信號', 
+                marker=dict(symbol='triangle-up', size=10, color='#27AE60', line=dict(width=1, color='white')),
+                hovertemplate='買入信號<br>日期: %{x:%Y/%m/%d}<br>價格: %{y:.2f}<extra></extra>'
             ), row=1, col=1)
         
         if sells:
             fig.add_trace(go.Scatter(
                 x=[s['date'] for s in sells], y=[s['price'] for s in sells], 
-                mode='markers', 
-                # <<<<<<< 變更點 2: 為賣出信號命名 >>>>>>>
-                name='賣出信號', 
-                marker=dict(symbol='triangle-down', size=10, color='#E74C3C', line=dict(width=1, color='white'))
+                mode='markers', name='賣出信號', 
+                marker=dict(symbol='triangle-down', size=10, color='#E74C3C', line=dict(width=1, color='white')),
+                hovertemplate='賣出信號<br>日期: %{x:%Y/%m/%d}<br>價格: %{y:.2f}<extra></extra>'
             ), row=1, col=1)
 
-        # 投資組合價值
+        # 投資組合價值 (已加入懸停格式)
         if portfolio is not None and len(portfolio) > 0:
              fig.add_trace(go.Scatter(
                 x=dates, y=portfolio, mode='lines', name='組合價值', 
-                line=dict(color='purple')
+                line=dict(color='purple'),
+                hovertemplate='日期: %{x:%Y/%m/%d}<br>組合價值: %{y:.4f}<extra></extra>'
             ), row=2, col=1)
 
-        # <<<<<<< 變更點 3: 啟用並設定圖例樣式 >>>>>>>
+        # 整體排版
         fig.update_layout(
             template='plotly_white', 
             height=500, 
             margin=dict(l=40, r=20, t=50, b=30), 
-            showlegend=True,  # <-- 啟用圖例
+            showlegend=True,
             legend=dict(
-                orientation="h",  # 水平排列
-                yanchor="bottom",
-                y=1.03,           # 放在圖表頂部之上
-                xanchor="right",
-                x=1
-            )
+                orientation="h", yanchor="bottom", y=1.03, xanchor="right", x=1
+            ),
+            hovermode='x unified'
         )
-        # <<<<<<< 變更點結束 >>>>>>>
+
+        fig.update_xaxes(tickformat='%Y/%m/%d')
+
         
         base_filename = f"{ticker.replace('.', '_')}_{system_type}_Rank{rank}_backtest"
         
@@ -624,16 +624,20 @@ def create_backtest_chart_assets(ticker, system_type, rank, portfolio, prices, d
         img_path = os.path.join('static/charts', img_filename)
         fig.write_image(img_path, scale=2)
         
-        # 儲存互動HTML
+        # 儲存互動HTML (已隱藏工具列)
         html_filename = f"{base_filename}.html"
         html_path = os.path.join('charts', html_filename)
-        fig.write_html(html_path, include_plotlyjs='cdn', config={'displayModeBar': True})
+        fig.write_html(
+            html_path, 
+            include_plotlyjs='cdn', 
+            config={'displayModeBar': False}
+        )
         
-        logger.info(f"回測圖表已生成（帶圖例）：{img_filename} 和 {html_filename}")
+        logger.info(f"✅ (最終完美版) 回測圖表已生成：{img_filename} 和 {html_filename}")
         return f"/static/charts/{img_filename}", f"/charts/{html_filename}"
         
     except Exception as e:
-        logger.error(f"創建回測圖表失敗: {e}")
+        logger.error(f"創建回測圖表(最終完美版)失敗: {e}", exc_info=True)
         return None, None
     
 def create_enhanced_stock_chart(ticker, company_name, hist_data):
@@ -858,7 +862,7 @@ class SingleStockTrainer:
             if end_dt > datetime.now():
                 errors.append("結束日期不能超過今天")
             if (end_dt - start_dt).days < 100:
-                errors.append("訓練期間至少需要100天")
+                errors.append("回測期間至少需要4個月")
         except ValueError:
             errors.append("日期格式錯誤，請使用 YYYY-MM-DD 格式")
         
@@ -1420,6 +1424,144 @@ class SingleStockTrainer:
             logger.error(f"手動回測過程發生嚴重錯誤: {e}", exc_info=True)
             return {'success': False, 'error': f'回測失敗: {str(e)}'}
 
+# ==============================================================================
+#           >>> 【步驟 1: 新增使用者策略監控的核心邏輯】 <<<
+# ==============================================================================
+class UserStrategyMonitor:
+    """
+    專門用於每日掃描和更新使用者儲存策略的最新信號。
+    """
+    def __init__(self):
+        # 使用一個較短的回測週期以大幅提高效能
+        self.scan_period_days = 365 # 只回測最近365天的數據
+        self.signal_check_days = 5   # 判斷最近3天內的信號
+        self.start_date, self.end_date = self._get_date_range()
+        self.trainer = SingleStockTrainer() # 借用其內部方法
+        logger.info(f"👤 [使用者策略監控] 監控器初始化。掃描期間: {self.start_date} to {self.end_date}")
+
+    def _get_date_range(self):
+        end_date = datetime.now(pytz.timezone('Asia/Taipei')).date()
+        start_date = end_date - timedelta(days=self.scan_period_days)
+        return start_date.strftime("%Y-%m-%d"), end_date.strftime("%Y-%m-%d")
+
+    def get_all_user_strategies(self):
+        """從資料庫獲取所有使用者儲存的策略。"""
+        query = "SELECT id, ticker, gene FROM saved_strategies"
+        strategies = execute_db_query(query, fetch_all=True)
+        logger.info(f"👤 [使用者策略監控] 從資料庫找到 {len(strategies)} 條使用者策略需要掃描。")
+        return strategies
+
+    def scan_strategy_for_recent_signal(self, ticker, gene_str):
+        """
+        對單一策略執行高效的短週期回測，並返回最新的信號狀態。
+        """
+        try:
+            gene = json.loads(gene_str)
+            system_type = 'A' if len(gene) in range(27, 29) else 'B' if len(gene) in range(9, 11) else None
+            if not system_type: return {'signal_type': 'NONE', 'signal_date': None}
+
+            # 借用 trainer 的數據載入和信號生成方法
+            data_result, _ = self.trainer.load_stock_data(ticker, self.start_date, self.end_date, system_type)
+            if not data_result: return {'signal_type': 'NONE', 'signal_date': None}
+
+            ga_config = self.trainer.system_a_config if system_type == 'A' else self.trainer.system_b_config
+            _, buy_signals, sell_signals = self.trainer.generate_trading_signals(gene, data_result, ga_config, system_type)
+
+            # 分析信號
+            last_buy_date = pd.to_datetime(buy_signals[-1]['date']).date() if buy_signals else None
+            last_sell_date = pd.to_datetime(sell_signals[-1]['date']).date() if sell_signals else None
+            
+            # 判斷最終狀態
+            last_signal_date = None
+            final_signal_type = 'NOP'
+
+            if last_buy_date and (not last_sell_date or last_buy_date > last_sell_date):
+                final_signal_type = 'HOLD' # 當前為持有狀態
+                last_signal_date = last_buy_date
+            elif last_sell_date:
+                last_signal_date = last_sell_date
+
+            # 檢查最近是否有新信號
+            today = datetime.now().date()
+            if last_buy_date and (today - last_buy_date).days < self.signal_check_days:
+                final_signal_type = 'BUY'
+            
+            if last_sell_date and (today - last_sell_date).days < self.signal_check_days:
+                # 如果最近有賣出，它會覆蓋買入或持有狀態
+                final_signal_type = 'SELL'
+            
+            return {'signal_type': final_signal_type, 'signal_date': last_signal_date}
+
+        except Exception as e:
+            logger.warning(f"  -> 掃描策略 {ticker} 時出錯: {e}")
+            return {'signal_type': 'NONE', 'signal_date': None}
+
+    def run_scan_and_update_db(self):
+        """
+        執行完整流程：獲取策略 -> 掃描 -> 更新資料庫
+        """
+        all_strategies = self.get_all_user_strategies()
+        if not all_strategies:
+            logger.info("👤 [使用者策略監控] 沒有找到任何使用者策略，任務結束。")
+            return
+
+        update_payloads = []
+        for i, strategy in enumerate(all_strategies):
+            logger.info(f"  - ({i+1}/{len(all_strategies)}) 正在掃描策略 ID: {strategy['id']}, Ticker: {strategy['ticker']}...")
+            signal_result = self.scan_strategy_for_recent_signal(strategy['ticker'], strategy['gene'])
+            
+            update_payloads.append({
+                'id': strategy['id'],
+                'last_signal_type': signal_result['signal_type'],
+                'last_signal_date': signal_result['signal_date'],
+                'last_checked_at': datetime.now()
+            })
+
+        # 批次更新資料庫
+        if update_payloads:
+            try:
+                conn = pymysql.connect(**DB_CONFIG)
+                with conn.cursor() as cursor:
+                    update_query = """
+                    UPDATE saved_strategies 
+                    SET last_signal_type = %s, last_signal_date = %s, last_checked_at = %s
+                    WHERE id = %s
+                    """
+                    # 將字典列表轉換為元組列表
+                    update_tuples = [
+                        (p['last_signal_type'], p['last_signal_date'], p['last_checked_at'], p['id'])
+                        for p in update_payloads
+                    ]
+                    cursor.executemany(update_query, update_tuples)
+                    conn.commit()
+                logger.info(f"💾 [使用者策略監控] 成功批次更新了 {len(update_payloads)} 條策略的信號狀態。")
+            except Exception as e:
+                logger.error(f"❌ [使用者策略監控] 批次更新資料庫失敗: {e}", exc_info=True)
+            finally:
+                if conn: conn.close()
+        
+        logger.info("✅ [使用者策略監控] 所有使用者策略掃描與更新任務完成。")
+
+# ==============================================================================
+#           >>> 【步驟 2: 新增排程任務的主函式】 <<<
+# ==============================================================================
+def run_user_strategies_scan():
+    """每日自動執行的使用者策略監控任務"""
+    with app.app_context():
+        logger.info("="*50 + f"\n👤 [排程任務] 啟動使用者策略每日掃描... (台灣時間: {datetime.now(pytz.timezone('Asia/Taipei'))})\n" + "="*50)
+        try:
+            if not ENGINES_IMPORTED:
+                logger.error("❌ [排程任務] 回測引擎模組未成功導入。使用者策略掃描任務中止。")
+                return
+            
+            monitor = UserStrategyMonitor()
+            monitor.run_scan_and_update_db()
+
+        except Exception as e:
+            logger.error(f"\n❌ [排程任務] 使用者策略掃描執行期間發生嚴重錯誤: {e}\n{traceback.format_exc()}")
+        finally:
+            logger.info("=" * 50)
+
 # 建立訓練器實例
 trainer = SingleStockTrainer()
 
@@ -1977,11 +2119,62 @@ def assign_portfolio_roles(strategies_data):
             
     return roles
 
+def _allocate_percentages_largest_remainder(strategies):
+    """
+    使用最大餘額法來分配整數百分比，確保總和為100且無負數。
+    Args:
+        strategies: 一個字典列表，每個字典必須包含 'ticker' 和 'final_adjusted_score'。
+    Returns:
+        一個字典列表，包含 'ticker' 和 'percentage'。
+    """
+    total_score = sum(s['final_adjusted_score'] for s in strategies)
+    if total_score <= 0:
+        # 如果總分為0或負數，則平均分配
+        equal_share = 100 // len(strategies)
+        remainder = 100 % len(strategies)
+        allocations = [{'ticker': s['ticker'], 'percentage': equal_share} for s in strategies]
+        for i in range(remainder):
+            allocations[i]['percentage'] += 1
+        return allocations
+
+    # 1. 計算每個策略的精確百分比和餘額
+    for s in strategies:
+        exact_percentage = (s['final_adjusted_score'] / total_score) * 100
+        s['exact_percentage'] = exact_percentage
+        s['floor_percentage'] = int(exact_percentage)
+        s['remainder'] = exact_percentage - s['floor_percentage']
+
+    # 2. 分配基礎百分比 (整數部分)
+    allocated_sum = sum(s['floor_percentage'] for s in strategies)
+    
+    # 3. 計算還需分配多少個 1%
+    remainder_to_distribute = 100 - allocated_sum
+
+    # 4. 根據餘額大小排序，來決定誰能獲得額外的 1%
+    strategies.sort(key=lambda x: x['remainder'], reverse=True)
+
+    # 5. 分配剩餘的百分比
+    for i in range(remainder_to_distribute):
+        strategies[i]['floor_percentage'] += 1
+
+    # 6. 整理並返回最終結果
+    final_allocations = [
+        {'ticker': s['ticker'], 'percentage': s['floor_percentage']}
+        for s in strategies
+    ]
+    
+    # 按百分比降序返回，讓前端顯示更好看
+    final_allocations.sort(key=lambda x: x['percentage'], reverse=True)
+    
+    return final_allocations
+
+# 在 main_app.py 中，找到並用此【修正版】函式完整替換
+
 @app.route('/api/capital-allocation', methods=['POST'])
 @login_required
 def api_capital_allocation():
     try:
-        ### 步驟 1-3: 獲取原料、指標升級與數據正規化 (保持不變) ###
+        # --- (前面的步驟 1-5 保持不變) ---
         data = request.get_json()
         strategy_ids = data.get('strategy_ids')
         risk_profile = data.get('risk_profile')
@@ -2002,7 +2195,6 @@ def api_capital_allocation():
         if not strategies_from_db:
             return jsonify({'success': False, 'message': '找不到策略'}), 404
 
-        ### 步驟 2: 指標升級與數據處理 ###
         processed_strategies = [{
             'id': s['id'], 'ticker': s['ticker'],
             'annualized_return': calculate_annualized_return(s['total_return'], s['train_start_date'], s['train_end_date']),
@@ -2011,7 +2203,6 @@ def api_capital_allocation():
             'win_rate': float(s.get('win_rate', 0.0))
         } for s in strategies_from_db]
 
-        ### 步驟 3: 數據正規化 ###
         metrics_to_normalize = ['annualized_return', 'sharpe_ratio', 'max_drawdown', 'win_rate']
         for metric in metrics_to_normalize:
             values = [s[metric] for s in processed_strategies if s.get(metric) is not None]
@@ -2027,11 +2218,9 @@ def api_capital_allocation():
                 else:
                     s[norm_key] = 100 * (value - min_val) / (max_val - min_val)
 
-        ### 步驟 4 & 5: AI 洞察 & 混合模型合成 ###
         weights = WEIGHTS.get(risk_profile, WEIGHTS['均衡型'])
         tickers_list = list(set([s['ticker'] for s in processed_strategies]))
-
-        # --- 修正的 Gemini API 調用 ---
+        
         gemini_analysis = {"analysis": [], "overall_summary": "AI市場總結生成中..."}
         if gemini_client and tickers_list:
             try:
@@ -2040,47 +2229,17 @@ def api_capital_allocation():
                     temperature=0.3, 
                     tools=[genai_types.Tool(google_search=genai_types.GoogleSearch())]
                 )
-                
-                # 修正的 API 調用
                 response = gemini_client.models.generate_content(
-                    model='models/gemini-2.5-flash',
-                    contents=prompt_text,
-                    config=config
+                    model='models/gemini-2.5-flash', contents=prompt_text, config=config
                 )
-                
-                # 檢查響應是否有效
                 if response and hasattr(response, 'text') and response.text:
-                    # <--- ✨ 修正點 START ---
-                    # 先移除頭尾可能存在的 Markdown 標籤和空白
-                    cleaned_text = response.text.strip()
-                    if cleaned_text.startswith('```json'):
-                        cleaned_text = cleaned_text[7:] # 移除 '```json'
-                    if cleaned_text.endswith('```'):
-                        cleaned_text = cleaned_text[:-3] # 移除結尾的 '```'
-                    cleaned_text = cleaned_text.strip() # 再次清理空白
-                    # <--- ✨ 修正點 END ---
-                    
-                    # 檢查清理後的文本是否為空
+                    cleaned_text = response.text.strip().replace('```json', '').replace('```', '').strip()
                     if cleaned_text:
-                        try:
-                            gemini_analysis = json.loads(cleaned_text)
-                            logger.info(f"成功解析 Gemini 響應: {len(gemini_analysis.get('analysis', []))} 支股票分析")
-                        except json.JSONDecodeError as json_err:
-                            logger.error(f"JSON 解析失敗: {json_err}")
-                            logger.error(f"原始響應內容: {cleaned_text[:200]}...")
-                            gemini_analysis = {"analysis": [], "overall_summary": "AI市場分析解析失敗。"}
-                    else:
-                        logger.warning("Gemini API 返回空內容")
-                        gemini_analysis = {"analysis": [], "overall_summary": "AI市場分析返回空內容。"}
-                else:
-                    logger.warning("Gemini API 返回無效響應")
-                    gemini_analysis = {"analysis": [], "overall_summary": "AI市場分析返回無效響應。"}
-                    
+                        gemini_analysis = json.loads(cleaned_text)
             except Exception as gemini_err:
                 logger.error(f"Gemini API 調用失敗: {gemini_err}")
-                gemini_analysis = {"analysis": [], "overall_summary": "AI市場分析暫時無法使用。"}
-
-        ### 步驟 6-8: 計算最終分數、分配角色、打包結果 (保持不變) ###
+        
+        # --- (計算分數的邏輯保持不變) ---
         for s in processed_strategies:
             s['quant_score'] = (s.get('norm_annualized_return', 50) * weights['annualized_return'] +
                               s.get('norm_sharpe_ratio', 50) * weights['sharpe_ratio'] +
@@ -2094,19 +2253,13 @@ def api_capital_allocation():
             s['final_adjusted_score'] = s['quant_score'] * ai_factor
             s['ai_summary'] = ticker_analysis['summary'] if ticker_analysis else "無即時市場分析。"
 
+        # --- ✨ 核心修改點在這裡 ✨ ---
+        # 移除舊的、有缺陷的 for 迴圈，直接呼叫新的、穩健的分配函式
+        final_allocations = _allocate_percentages_largest_remainder(processed_strategies)
+        # --- ✨ 修改結束 ✨ ---
+        
         portfolio_roles = assign_portfolio_roles(processed_strategies)
-
-        total_score = sum(s['final_adjusted_score'] for s in processed_strategies)
-        final_allocations, running_total = [], 0
-        if total_score > 0:
-            for i, s in enumerate(sorted(processed_strategies, key=lambda x: x['final_adjusted_score'], reverse=True)):
-                if i == len(processed_strategies) - 1:
-                    percentage = 100 - running_total
-                else:
-                    percentage = round((s['final_adjusted_score'] / total_score) * 100)
-                running_total += percentage
-                final_allocations.append({'ticker': s['ticker'], 'percentage': percentage})
-
+        
         reasoning = {
             "overall_summary": gemini_analysis.get("overall_summary", "AI市場總結生成失敗。"),
             "per_stock_analysis": [{
@@ -2573,34 +2726,36 @@ def get_this_weeks_english_news(target_topics: dict):
     
     return list(seen_titles), real_date_range_str
 
-def get_sentiment_and_translate_summary(analyzed_titles: list, simulated_week_key: str, real_news_date_range: str, few_shot_examples=None):
-    """使用"時空橋接提示"讓 Gemini 進行模擬分析。"""
+# 在 main_app.py 中，找到並用此【修正版】函式完整替換
+
+def get_sentiment_and_translate_summary(analyzed_titles: list, simulated_week_key: str, real_news_date_range: str, safety_settings, few_shot_examples=None):
+    """
+    【核心】使用"時空橋接提示"讓 Gemini 進行模擬分析。 (v2.1 整合安全設定)
+    """
     if not gemini_client:
         return None, "Gemini client未配置"
     
     if not analyzed_titles:
         return None, "分析後的新聞標題列表為空"
     
+    # (此部分 prompt 邏輯不變)
     example_prompt_part = ""
     if few_shot_examples:
         example_prompt_part = "Here are some historical rating examples for your reference (in Traditional Chinese):\n"
         for ex_date, ex_score, ex_summary in few_shot_examples:
             example_prompt_part += f"- Week: {ex_date}; Sentiment Score: {ex_score}; Summary: {ex_summary}\n"
         example_prompt_part += "\n"
-    
     news_titles_str = "\n".join([f"- {title}" for title in analyzed_titles])
-    
     prompt = f"""
 You are an expert financial analyst participating in a market simulation.
 **CONTEXT:**
 - The **simulated week** you are analyzing is: **{simulated_week_key}**
 - To perform your analysis, you have been provided with **real-world news headlines** from the recent period of: **{real_news_date_range}**
 **YOUR TASK:**
-You must **interpret these real-world events as if they were happening during the simulated week**. Synthesize the key themes (e.g., inflation, Fed policy, tech trends, geopolitical events) and generate a market analysis *for the simulated week*.
-The headlines below are pre-analyzed by FinBERT. The format is [SENTIMENT_LABEL, FinBERT_Score] Original Headline. Use this as a key reference for sentiment.
+You must **interpret these real-world events as if they were happening during the simulated week**. Synthesize the key themes and generate a market analysis *for the simulated week*.
 **REQUIRED OUTPUT FORMAT:**
-1. **Sentiment Score**: A single integer from 0 to 100 representing the market sentiment for the **simulated week**. (0=fear, 50=neutral, 100=greed).
-2. **News Summary (Traditional Chinese)**: A translated summary of the key events, written *as if* they occurred in the simulated week. Separate items with a semicolon.
+1. **Sentiment Score**: A single integer from 0 to 100. (0=fear, 50=neutral, 100=greed).
+2. **News Summary (Traditional Chinese)**: A translated summary of key events. Separate items with a semicolon.
 ---
 **Provided Real-World News Headlines:**
 {news_titles_str}
@@ -2614,34 +2769,44 @@ News Summary (Traditional Chinese): [Your translated summary for the simulated w
         logger.info(f"\n  [新聞分析] 發送 {len(analyzed_titles)} 條新聞到 Gemini (模擬週: {simulated_week_key}, 真實新聞源: {real_news_date_range})...")
         
         response = gemini_client.models.generate_content(
-            model="models/gemini-2.5-flash",
+            model="models/gemini-1.5-flash-latest", # <-- 修改：同步模型版本
             contents=prompt,
-            config=genai_types.GenerateContentConfig(temperature=0.3, max_output_tokens=1000)
+            config=genai_types.GenerateContentConfig(
+                temperature=0.3,
+                max_output_tokens=1000,
+            ),
+            safety_settings=safety_settings # <-- 新增：傳入安全設定
         )
         
-        content = response.text
-        
-        score_match = re.search(r"Sentiment Score:\s*(\d+)", content, re.IGNORECASE)
-        summary_match = re.search(r"News Summary \(Traditional Chinese\):\s*(.+)", content, re.IGNORECASE | re.DOTALL)
-        
-        sentiment_score_val = int(score_match.group(1)) if score_match else None
-        
-        if summary_match:
-            news_summary_val = summary_match.group(1).strip()
-            news_summary_val = re.sub(r'^\s*-\s*', '', news_summary_val)
-            news_summary_val = news_summary_val.replace('\n', ' ').replace(';', '；').strip()
-            news_summary_val = re.sub(r'\s*；\s*', '；', news_summary_val)
-            news_summary_val = re.sub(r'；$', '', news_summary_val)
+        content = None
+        if response and hasattr(response, 'text'):
+            content = response.text
+
+        if content and isinstance(content, str):
+            score_match = re.search(r"Sentiment Score:\s*(\d+)", content, re.IGNORECASE)
+            summary_match = re.search(r"News Summary \(Traditional Chinese\):\s*(.+)", content, re.IGNORECASE | re.DOTALL)
+            sentiment_score_val = int(score_match.group(1)) if score_match else None
+            
+            if summary_match:
+                news_summary_val = summary_match.group(1).strip().replace('\n', ' ').replace(';', '；').strip()
+                news_summary_val = re.sub(r'^\s*-\s*', '', news_summary_val)
+                news_summary_val = re.sub(r'\s*；\s*', '；', news_summary_val)
+                news_summary_val = re.sub(r'；$', '', news_summary_val)
+            else:
+                news_summary_val = "未能從API響應中解析出摘要"
+            
+            logger.info(f"  [新聞分析] 已解析 ({simulated_week_key}): 分數={sentiment_score_val}, 摘要='{news_summary_val[:100]}...'")
         else:
-            news_summary_val = "未能生成摘要"
-        
-        logger.info(f"  [新聞分析] 已解析 ({simulated_week_key}): 分數={sentiment_score_val}, 摘要='{news_summary_val[:100]}...'")
-        
+            logger.error("  [新聞分析] Gemini API 返回空文本內容")
+            sentiment_score_val = None
+            news_summary_val = "Gemini API返回空文本"
+
         return sentiment_score_val, news_summary_val
         
     except Exception as e:
         logger.error(f"  [新聞分析] Gemini API 調用或解析時出錯: {e}")
         return None, f"Gemini API調用或解析錯誤: {str(e)}"
+
 
 def get_few_shot_examples(csv_filepath, num_examples=5):
     """從 CSV 讀取 few-shot 學習的範例。"""
@@ -2786,7 +2951,7 @@ class StrategyBacktesterWithSignals:
     def get_all_strategies(self):
         """從資料庫獲取所有待回測的策略"""
         query = """SELECT user_id, market_type, stock_ticker, ai_strategy_gene, strategy_details, strategy_rank
-                   FROM ai_vs_user_games WHERE strategy_rank > 0 AND ai_strategy_gene IS NOT NULL 
+                   FROM ai_vs_user_games WHERE strategy_rank = 1 AND ai_strategy_gene IS NOT NULL 
                    AND (user_id = 2 OR user_id = 3) ORDER BY stock_ticker, user_id, strategy_rank"""
         strategies = execute_db_query(query, fetch_all=True)
         if strategies:
@@ -3001,6 +3166,8 @@ def run_scheduled_backtest():
         finally:
             logger.info("=" * 50)
 
+# 在 main_app.py 中，找到並用此【修正版】函式完整替換
+
 def run_scheduled_news_update():
     """(新整合) 每日自動執行的市場情緒分析任務"""
     with app.app_context():
@@ -3010,13 +3177,80 @@ def run_scheduled_news_update():
                 logger.error("❌ [排程任務] 錯誤: GEMINI_API_KEY 環境變數未設定。市場情緒分析任務中止。")
                 return
 
-            # 確保 CSV 檔案存在
+            # --- ✨ 核心修改點在這裡 ✨ ---
+            # 1. 建立與 update_news.py 完全一致的安全設定
+            safety_settings = [
+                genai_types.SafetySetting(
+                    category="HARM_CATEGORY_HARASSMENT",
+                    threshold="BLOCK_MEDIUM_AND_ABOVE"
+                ),
+                genai_types.SafetySetting(
+                    category="HARM_CATEGORY_HATE_SPEECH",
+                    threshold="BLOCK_MEDIUM_AND_ABOVE"
+                ),
+                genai_types.SafetySetting(
+                    category="HARM_CATEGORY_SEXUALLY_EXPLICIT",
+                    threshold="BLOCK_MEDIUM_AND_ABOVE"
+                ),
+                genai_types.SafetySetting(
+                    category="HARM_CATEGORY_DANGEROUS_CONTENT",
+                    threshold="BLOCK_MEDIUM_AND_ABOVE"
+                )
+            ]
+            # --- ✨ 修改結束 ✨ ---
+
             if not os.path.exists(CSV_FILEPATH):
                 logger.warning(f"'{CSV_FILEPATH}' 不存在，創建一個空的範例檔案...")
                 pd.DataFrame(columns=['年/週', '情緒分數', '重大新聞摘要']).to_csv(CSV_FILEPATH, index=False, encoding='utf-8-sig')
 
-            # 執行主流程
-            update_sentiment_csv(CSV_FILEPATH, target_topics=TARGET_COMPANIES_AND_TOPICS)
+            # 修改 update_sentiment_csv 函式中的 Gemini 呼叫，使其也接受 safety_settings
+            # (這一步我們直接修改 get_sentiment_and_translate_summary 來實現)
+            simulated_week_key = get_current_week_key()
+            logger.info(f"[新聞分析] 目標模擬週的鍵值為: {simulated_week_key}")
+
+            raw_english_titles, real_date_range = get_this_weeks_english_news(TARGET_COMPANIES_AND_TOPICS)
+            if not raw_english_titles:
+                logger.warning(f"[新聞分析] 無法獲取近期真實新聞，流程終止。")
+                return
+
+            analyzed_titles = analyze_titles_with_finbert(raw_english_titles)
+            few_shot_examples = get_few_shot_examples(CSV_FILEPATH, num_examples=5)
+
+            # --- ✨ 核心修改點在這裡 ✨ ---
+            # 2. 將安全設定傳遞給核心函式
+            score, summary_chinese = get_sentiment_and_translate_summary(
+                analyzed_titles,
+                simulated_week_key,
+                real_date_range,
+                safety_settings, # <-- 傳入設定
+                few_shot_examples
+            )
+            # --- ✨ 修改結束 ✨ ---
+
+            if score is not None and summary_chinese and "未能生成摘要" not in summary_chinese and "Gemini API返回空文本" not in summary_chinese:
+                try:
+                    df = pd.read_csv(CSV_FILEPATH, encoding='utf-8-sig') if os.path.exists(CSV_FILEPATH) else pd.DataFrame(columns=['年/週', '情緒分數', '重大新聞摘要'])
+                    df['年/週'] = df['年/週'].astype(str).str.strip()
+                    week_key_stripped = simulated_week_key.strip()
+                    
+                    week_exists_mask = df['年/週'] == week_key_stripped
+                    
+                    if week_exists_mask.any():
+                        logger.info(f"\n[新聞分析] 更新模擬週 ({week_key_stripped}) 的情緒分數與摘要...")
+                        df.loc[week_exists_mask, '情緒分數'] = score
+                        df.loc[week_exists_mask, '重大新聞摘要'] = summary_chinese
+                    else:
+                        logger.info(f"\n[新聞分析] 新增模擬週 ({week_key_stripped}) 的情緒分數與摘要...")
+                        new_row = pd.DataFrame([{'年/週': week_key_stripped, '情緒分數': score, '重大新聞摘要': summary_chinese}])
+                        df = pd.concat([df, new_row], ignore_index=True)
+                    
+                    df.drop_duplicates(subset=['年/週'], keep='last', inplace=True)
+                    df.to_csv(CSV_FILEPATH, index=False, encoding='utf--sig')
+                    logger.info(f"[新聞分析] 已成功將 {week_key_stripped} 的資料寫入/更新到 CSV！")
+                except Exception as e:
+                    logger.error(f"[新聞分析] 寫入 CSV 時出錯: {e}")
+            else:
+                logger.error(f"\n[新聞分析] 未能從 Gemini 取得有效的模擬分析結果：{summary_chinese}")
 
             logger.info("✅ [排程任務] 每日市場情緒分析任務執行完畢。")
         except Exception as e:
@@ -3058,16 +3292,16 @@ if __name__ == '__main__':
     scheduler = BackgroundScheduler(timezone=pytz.timezone('Asia/Taipei'))
     
     # 新增任務：每日市場情緒分析
-    scheduler.add_job(
-        func=run_scheduled_news_update,
-        trigger='cron',
-        hour=8,
-        minute=30,
-        id='daily_news_update_job',
-        name='每日台灣時間 8:30 執行市場情緒分析',
-        replace_existing=True
-    )
-    logger.info("✅ 已設定每日市場情緒分析排程 (08:30)。")
+   #scheduler.add_job(
+        #func=run_scheduled_news_update,
+        #trigger='cron',
+       # hour=11,
+        #minute=0,
+       # id='daily_news_update_job',
+       # name='每日台灣時間 8:30 執行市場情緒分析',
+       # replace_existing=True
+    #)
+   #logger.info("✅ 已設定每日市場情緒分析排程 (08:30)。")
     
     if ENGINES_IMPORTED:
         # 新增任務：每日回測
@@ -3083,12 +3317,25 @@ if __name__ == '__main__':
         logger.info("✅ 已設定每日策略回測排程 (17:30)。")
     else:
         logger.warning("⚠️ 由於模組導入失敗，每日自動回測功能已停用。")
-    
+
+  # ==============================================================================
+        #           >>> 【步驟 3: 註冊新的排程任務】 <<<
+        # ==============================================================================
+    scheduler.add_job(
+        func=run_user_strategies_scan, # <--- 呼叫我們的新函式
+        trigger='cron', hour=18, minute=30, # <--- 錯開時間執行
+        id='daily_user_strategy_scan_job', # <--- 給它一個新的唯一 ID
+        name='每日台灣時間 18:30 掃描使用者策略',
+        replace_existing=True
+        )
+    logger.info("✅ 已設定每日使用者策略掃描排程 (18:30)。")
+        # ==============================================================================
+   
     # 啟動排程器
     scheduler.start()
     logger.info("🚀 排程器已啟動。")
     
-    # 應用程式結束時優雅地關閉排程器
+    
     atexit.register(lambda: scheduler.shutdown())
     
     logger.info("🚀 啟動整合版 AI 策略分析與市場分析平台...")
