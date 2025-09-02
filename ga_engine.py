@@ -595,7 +595,7 @@ class ValidGASampling(Sampling):
             gene = np.zeros(GENE_LENGTH, dtype=int)
             
             # 🔥 完全複製傳統GA的基因生成邏輯
-            gene[GENE_MAP['regime_choice']] = random.randint(0, 1)
+            gene[GENE_MAP['regime_choice']] = 0
             gene[GENE_MAP['normal_strat']] = random.randint(0, 7)
             gene[GENE_MAP['risk_off_strat']] = random.randint(0, 7)
             gene[GENE_MAP['vix_thr']] = random.randint(vix_thr_min, vix_thr_max)
@@ -1405,7 +1405,11 @@ def format_ga_gene_parameters_to_text(gene):
         if regime_choice == 0:
             regime_threshold = gene[GENE_MAP['vix_thr']]
             vix_ma_period = config['vix_ma_period_options'][gene[GENE_MAP['vix_ma_p']]]
-            regime_indicator_details = f"VIX {vix_ma_period}日均線"
+            # 根據VIX的MA天期，決定顯示的文字
+            if vix_ma_period <= 2:
+                regime_indicator_details = "當日VIX值"
+            else:
+                regime_indicator_details = f"VIX {vix_ma_period}日均線"
             regime_condition_desc = f"≥ {regime_threshold}"
         else:
             regime_threshold = gene[GENE_MAP['sentiment_thr']]
