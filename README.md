@@ -48,7 +48,7 @@
 -   數據科學: Pandas, NumPy, Numba, Pandas-TA
 -   AI & 優化: Google Generative AI (Gemini), Pymoo (NSGA-II)
 -   資料庫: MySQL 
--   前端: 原生 HTML, CSS, JavaScript 
+-   前端: HTML, CSS, JavaScript 
 -   圖表: Plotly
 
 ---
