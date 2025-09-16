@@ -1,6 +1,3 @@
-# ga_engine.py - 完整版支援 NSGA-II 多目標優化與平均交易報酬率 (修復版)
-
-# 版本: 2.1 - 修復NSGA-II基因生成和交易獎勵機制
 
 import pandas as pd
 import numpy as np
@@ -15,7 +12,6 @@ import os
 import json
 from datetime import datetime as dt_datetime, timedelta
 
-# NSGA-II 支援
 try:
     from pymoo.core.problem import Problem
     from pymoo.core.sampling import Sampling
@@ -25,10 +21,8 @@ try:
     from pymoo.operators.mutation.pm import PM
     from pymoo.operators.sampling.rnd import FloatRandomSampling
     NSGA2_AVAILABLE = True
-    print("[GAEngine] NSGA-II 支援已載入。")
 except ImportError:
     NSGA2_AVAILABLE = False
-    print("[GAEngine] WARN: NSGA-II 套件 (pymoo) 未安裝。將使用傳統單目標 GA。請執行 'pip install pymoo' 安裝以啟用多目標優化。")
 
 # --- GA Configuration ---
 STRATEGY_CONFIG_SHARED_GA = {
@@ -38,7 +32,7 @@ STRATEGY_CONFIG_SHARED_GA = {
     'adx_period_options': [7, 14, 21],
     'bb_length_options': [10, 20],
     'bb_std_options': [1.5, 2.0],
-    'ma_period_options': [5, 10, 20, 50, 60],
+    'ma_period_options': [5, 10, 20, 50, 100],
     'ema_s_period_options': [5, 8],
     'ema_m_period_options': [8, 10, 13],
     'ema_l_period_options': [13, 21, 34],
@@ -89,9 +83,7 @@ GENE_MAP = {
 
 STRAT_NAMES = ["MA Cross", "Triple EMA", "MA+MACD+RSI", "EMA+RSI", "BB+RSI", "BB+ADX", "ATR+KD", "BB+MACD"]
 
-# --- Data Loading Functions --- (保持不變)
 def parse_week_string_for_sentiment(week_str):
-    """解析週期字串用於情緒數據"""
     try:
         if '-' in week_str and len(week_str.split('-')[0].split('/')) == 3:
             year_part = week_str.split('/')[0]
@@ -121,7 +113,6 @@ def parse_week_string_for_sentiment(week_str):
         return None, None
 
 def load_sentiment_data_for_unified(csv_filepath, verbose=False):
-    """載入並轉換情緒數據為日期序列"""
     try:
         sentiment_df = pd.read_csv(csv_filepath, encoding='utf-8-sig')
         sentiment_df.rename(columns={'年/週': 'WeekString', '情緒分數': 'SentimentScore'}, inplace=True, errors='ignore')
@@ -159,7 +150,6 @@ def load_sentiment_data_for_unified(csv_filepath, verbose=False):
         return None
 
 def ga_load_data(ticker, vix_ticker="^VIX", start_date=None, end_date=None, verbose=False, sentiment_csv_path=None, retries=3, delay=5):
-    """統一的數據載入函數，支援重試機制"""
     if verbose:
         print(f"[GAEngine] Loading unified data for {ticker}, VIX:{vix_ticker}, Sentiment:{sentiment_csv_path}...")
 
@@ -261,7 +251,6 @@ def ga_load_data(ticker, vix_ticker="^VIX", start_date=None, end_date=None, verb
     return None, None, None, None, None
 
 def ga_precompute_indicators(stock_df, vix_series, strategy_config, sentiment_series=None, verbose=False):
-    """預計算所有技術指標"""
     precalc = {
         'rsi': {}, 'vix_ma': {}, 'sentiment_ma': {}, 'bbl': {}, 'bbm': {}, 'bbu': {}, 'adx': {},
         'ema_s': {}, 'ema_m': {}, 'ema_l': {}, 'atr': {}, 'atr_ma': {},
@@ -354,14 +343,13 @@ def ga_precompute_indicators(stock_df, vix_series, strategy_config, sentiment_se
         traceback.print_exc()
         return precalc, False
 
-# --- Core Numba Strategy --- (保持不變，已經正確使用numba)
 @numba.jit(nopython=True)
 def run_strategy_numba_core(
     gene_arr, prices_arr, vix_ma_arr, sentiment_ma_arr,
     rsi_arr, adx_arr, bbl_arr, bbm_arr, bbu_arr, ma_s_arr, ma_l_arr,
     ema_s_arr, ema_m_arr, ema_l_arr, atr_arr, atr_ma_arr, k_arr, d_arr,
     macd_line_arr, macd_signal_arr, commission_rate, start_trading_iloc):
-    """Numba加速的策略核心 - 基於28基因系統A策略執行買賣決策"""
+
 
     regime_indicator_choice = int(gene_arr[0])
     normal_regime_strat_choice = int(gene_arr[1])
@@ -517,10 +505,7 @@ def run_strategy_numba_core(
             buy_indices_temp[:buy_count], buy_prices_temp[:buy_count],
             sell_indices_temp[:sell_count], sell_prices_temp[:sell_count],
             sell_count)
-
-# === 🔥 修復：新增有效基因採樣器 ===
 class ValidGASampling(Sampling):
-    """自定義的有效基因採樣器，確保與傳統GA一致"""
     
     def __init__(self, ga_params):
         super().__init__()
@@ -530,7 +515,6 @@ class ValidGASampling(Sampling):
         GENE_LENGTH = len(GENE_MAP)
         population = []
         
-        # 複製傳統GA的基因生成邏輯
         vix_thr_min, vix_thr_max = self.ga_params['vix_threshold_range']
         sent_thr_min, sent_thr_max = self.ga_params['sentiment_threshold_range']
         rsi_buy_min, rsi_buy_max, rsi_sell_min, rsi_sell_max = self.ga_params['rsi_threshold_range']
@@ -561,14 +545,12 @@ class ValidGASampling(Sampling):
                     num_p_opts[gene_key_or_keys] = num_options
         
         def is_gene_valid(gene):
-            """🔥 完全複製傳統GA的驗證邏輯"""
-            # MA期間約束
+
             ma_s_p_idx = gene[GENE_MAP['ma_s_p']]
             ma_l_p_idx = gene[GENE_MAP['ma_l_p']]
             if p_opts['ma_period_options'][ma_s_p_idx] >= p_opts['ma_period_options'][ma_l_p_idx]:
                 return False
                 
-            # EMA期間約束
             ema_s_p_idx = gene[GENE_MAP['ema_s_p']]
             ema_m_p_idx = gene[GENE_MAP['ema_m_p']]
             ema_l_p_idx = gene[GENE_MAP['ema_l_p']]
@@ -577,15 +559,13 @@ class ValidGASampling(Sampling):
                    p_opts['ema_l_period_options'][ema_l_p_idx]):
                 return False
                 
-            # MACD期間約束
             macd_f_p_idx = gene[GENE_MAP['macd_f_p']]
             macd_s_p_idx = gene[GENE_MAP['macd_s_p']]
             if p_opts['macd_fast_period_options'][macd_f_p_idx] >= p_opts['macd_slow_period_options'][macd_s_p_idx]:
                 return False
                 
             return True
-        
-        # 生成有效基因
+
         attempts = 0
         max_attempts = n_samples * 1000
         
@@ -594,7 +574,6 @@ class ValidGASampling(Sampling):
         while len(population) < n_samples and attempts < max_attempts:
             gene = np.zeros(GENE_LENGTH, dtype=int)
             
-            # 🔥 完全複製傳統GA的基因生成邏輯
             gene[GENE_MAP['regime_choice']] = 0
             gene[GENE_MAP['normal_strat']] = random.randint(0, 7)
             gene[GENE_MAP['risk_off_strat']] = random.randint(0, 7)
@@ -617,12 +596,11 @@ class ValidGASampling(Sampling):
         
         if len(population) < n_samples:
             print(f"[GAEngine] WARNING: 只生成了 {len(population)}/{n_samples} 個有效基因")
-            # 填充不足的部分
+
             while len(population) < n_samples:
                 if population:
                     population.append(population[0])  # 複製第一個有效基因
                 else:
-                    # 緊急情況：生成一個基本有效的基因
                     emergency_gene = np.zeros(GENE_LENGTH, dtype=int)
                     emergency_gene[GENE_MAP['ma_s_p']] = 0  # 最短MA
                     emergency_gene[GENE_MAP['ma_l_p']] = len(p_opts.get('ma_period_options', [5, 10])) - 1  # 最長MA
@@ -634,11 +612,10 @@ class ValidGASampling(Sampling):
                     population.append(emergency_gene)
         
         print(f"[GAEngine] NSGA-II 成功生成 {len(population)} 個有效基因（嘗試 {attempts} 次）")
-        return np.array(population, dtype=float)  # NSGA-II需要float類型
+        return np.array(population, dtype=float) 
 
 # === NSGA-II 多目標優化類別 ===
 class MultiObjectiveStrategyProblem(Problem):
-    """多目標策略優化問題定義 - 包含平均交易報酬率和交易次數約束"""
 
     def __init__(self, prices, dates, precalculated_indicators, ga_params):
         self.prices = prices
@@ -717,7 +694,7 @@ class MultiObjectiveStrategyProblem(Problem):
                 )
 
                 # 目標1：最大化總報酬率（轉為最小化負報酬率）
-                objectives[i, 0] = -metrics['total_return'] * 1.5  # 增加權重以強調報酬率
+                objectives[i, 0] = -metrics['total_return'] 
 
                 # 目標2：最小化最大回撤
                 objectives[i, 1] = metrics['max_drawdown']
@@ -746,7 +723,6 @@ class MultiObjectiveStrategyProblem(Problem):
         out["G"] = constraints
 
     def _run_backtest_raw(self, gene):
-        """執行回測，返回原始數據和計數"""
         def get_indicator_list(name, gene_indices, opt_keys):
             params = [self.ga_params[k][int(gene[g_idx])] for g_idx, k in zip(gene_indices, opt_keys)]
             key = tuple(params) if len(params) > 1 else params[0]
@@ -800,7 +776,6 @@ class MultiObjectiveStrategyProblem(Problem):
         return portfolio_values, buy_indices_numba, buy_prices_numba, sell_indices_numba, sell_prices_numba, sell_count_numba
 
     def _calculate_metrics(self, portfolio_values, buy_indices, buy_prices, sell_indices, sell_prices, completed_trades_count, ga_params_config_for_penalties):
-        """🔥 修復：計算策略績效指標 - 包含交易獎勵機制與平均交易報酬率"""
         
         no_trade_return_penalty = ga_params_config_for_penalties.get('nsga2_no_trade_penalty_return', -0.5)
         no_trade_max_drawdown_penalty = ga_params_config_for_penalties.get('nsga2_no_trade_penalty_max_drawdown', 1.0)
@@ -821,7 +796,6 @@ class MultiObjectiveStrategyProblem(Problem):
         final_value = portfolio_values[-1] if np.isfinite(portfolio_values[-1]) else (portfolio_values[np.isfinite(portfolio_values)][-1] if np.isfinite(portfolio_values).any() else 1.0)
         total_return_actual = final_value - 1.0
 
-        # 🔥 新增：加入交易獎勵機制（與傳統GA一致）
         trade_bonus = 1.0
         min_trades = ga_params_config_for_penalties.get('min_trades_for_full_score', 4)
         no_trade_penalty = ga_params_config_for_penalties.get('no_trade_penalty_factor', 0.1)
@@ -832,7 +806,6 @@ class MultiObjectiveStrategyProblem(Problem):
         elif completed_trades_count < min_trades:
             trade_bonus = low_trade_penalty
         
-        # 調整總報酬率（模擬傳統GA的適應度計算）
         adjusted_final_value = final_value * trade_bonus
         adjusted_total_return = adjusted_final_value - 1.0
 
@@ -865,8 +838,7 @@ class MultiObjectiveStrategyProblem(Problem):
                     'average_trade_return': 0.0
                 }
 
-        # --- 正常有交易的策略計算 ---
-        total_return = adjusted_total_return  # 🔥 使用調整後的報酬率
+        total_return = adjusted_total_return  
 
         portfolio_values_clean = portfolio_values[np.isfinite(portfolio_values)]
         running_max = np.maximum.accumulate(portfolio_values_clean)
@@ -876,10 +848,8 @@ class MultiObjectiveStrategyProblem(Problem):
 
         std_dev = np.std(portfolio_values_clean) if len(portfolio_values_clean) > 1 else 0.001
          
-        # === 【新增】從配置中獲取無風險利率 ===
         risk_free_rate = ga_params_config_for_penalties.get('risk_free_rate', 0.04)
-        
-        # === 【新增】計算夏普比率 ===
+
         sharpe_ratio = 0.0
         if std_dev > 1e-9:
             daily_returns = pd.Series(portfolio_values_clean).pct_change().dropna()
@@ -892,7 +862,7 @@ class MultiObjectiveStrategyProblem(Problem):
         total_loss = 0.0
         wins = 0
 
-        # 🔥 新增：計算平均交易報酬率
+        # 計算平均交易報酬率
         total_trade_returns = 0.0
         valid_trades = 0
 
@@ -929,13 +899,7 @@ class MultiObjectiveStrategyProblem(Problem):
             'sharpe_ratio': sharpe_ratio  
         }
 
-# =======================================================================================
-# 檔案: ga_engine.py
-# 請用以下完整函數替換您檔案中現有的 select_best_from_pareto 函數
-# =======================================================================================
-
 def select_best_from_pareto(pareto_genes, pareto_objectives, prices, precalculated_indicators, selection_method='custom_balance', ga_params=GA_PARAMS_CONFIG):
-    """從帕累托前沿選擇最佳策略 - 支援平均交易報酬率"""
     if len(pareto_genes) == 0:
         return None, {}
 
@@ -982,8 +946,8 @@ def select_best_from_pareto(pareto_genes, pareto_objectives, prices, precalculat
         best_idx = np.argmax(expectancy_scores)
         
     elif selection_method == 'aggressive':
-        # 🔥 新增：激進高報酬率選擇方法
-        high_return_threshold = 0.30  # 30% 報酬率門檻
+
+        high_return_threshold = 0.30
         high_return_indices = [
             i for i, m in enumerate(all_metrics_on_pareto_front)
             if m['total_return'] > high_return_threshold and m['trade_count'] >= ga_params.get('min_required_trades', 1)
@@ -1012,23 +976,18 @@ def select_best_from_pareto(pareto_genes, pareto_objectives, prices, precalculat
                 print(f"[GAEngine] return_aggressive: 警告 - 使用不滿足交易次數要求的解")
     
     elif selection_method == 'custom_balance':
-        # 🔥🔥🔥 --- 修正後的自定義權重邏輯 --- 🔥🔥🔥
-        
-        # 從 ga_params 獲取用戶定義的權重，若無則使用預設值
         custom_weights = ga_params.get('custom_weights', {
             'total_return_weight': 0.35, 'avg_trade_return_weight': 0.30,
             'win_rate_weight': 0.25, 'trade_count_weight': 0.05, 'drawdown_weight': 0.05
         })
         print(f"[GAEngine] 使用自定義權重進行選擇: {custom_weights}")
 
-        # 從所有策略中提取各項指標
         all_returns = np.array([m['total_return'] for m in all_metrics_on_pareto_front])
         all_avg_trade_returns = np.array([m['average_trade_return'] for m in all_metrics_on_pareto_front])
         all_win_rates = np.array([m.get('win_rate_pct', 0) for m in all_metrics_on_pareto_front])
         all_trade_counts = np.array([m['trade_count'] for m in all_metrics_on_pareto_front])
         all_max_drawdowns = np.array([m['max_drawdown'] for m in all_metrics_on_pareto_front])
 
-        # 定義正規化函數，將所有指標縮放到 0-1 之間，以便公平比較
         def normalize(arr):
             min_val, max_val = np.min(arr), np.max(arr)
             # 避免除以零
@@ -1037,15 +996,13 @@ def select_best_from_pareto(pareto_genes, pareto_objectives, prices, precalculat
             else:
                 return np.full_like(arr, 0.5) # 如果所有值都相同，則返回中間值
 
-        # 正規化各項指標
         norm_returns = normalize(all_returns)
         norm_avg_trade_returns = normalize(all_avg_trade_returns)
         norm_win_rates = normalize(all_win_rates)
         norm_trade_counts = normalize(all_trade_counts)
-        # 對於最大回撤，值越小越好，所以正規化後用1減去，使其變為越大越好
+
         norm_drawdowns_inv = 1 - normalize(all_max_drawdowns)
 
-        # 根據用戶定義的權重計算每個策略的最終平衡分數
         balanced_scores = (
             norm_returns * custom_weights.get('total_return_weight', 0.35) +
             norm_avg_trade_returns * custom_weights.get('avg_trade_return_weight', 0.30) +
@@ -1054,10 +1011,9 @@ def select_best_from_pareto(pareto_genes, pareto_objectives, prices, precalculat
             norm_drawdowns_inv * custom_weights.get('drawdown_weight', 0.05)
         )
         
-        # 選擇分數最高的策略
         best_idx = np.argmax(balanced_scores)
         
-    else:  # 'sharpe' 或其他未定義的方法作為預設
+    else: 
         best_idx = 0
         best_sharpe = -np.inf
         for i, metrics in enumerate(all_metrics_on_pareto_front):
@@ -1071,7 +1027,6 @@ def select_best_from_pareto(pareto_genes, pareto_objectives, prices, precalculat
     best_gene = pareto_genes[best_idx]
     best_metrics = all_metrics_on_pareto_front[best_idx]
 
-    # 計算夏普比率並加入最終結果
     if 'std_dev' in best_metrics and best_metrics['std_dev'] > 1e-9:
         best_metrics['sharpe_ratio'] = best_metrics['total_return'] / best_metrics['std_dev']
     else:
@@ -1079,9 +1034,7 @@ def select_best_from_pareto(pareto_genes, pareto_objectives, prices, precalculat
 
     return best_gene, best_metrics
 
-# --- 統一的遺傳算法函數入口 ---
 def genetic_algorithm_unified(prices, dates, precalculated_indicators, ga_params, seed_genes=None):
-    """統一的遺傳算法函數，支援 NSGA-II 多目標優化和傳統單目標 GA"""
     use_nsga2 = ga_params.get('nsga2_enabled', False) and NSGA2_AVAILABLE
 
     if use_nsga2:
@@ -1092,7 +1045,6 @@ def genetic_algorithm_unified(prices, dates, precalculated_indicators, ga_params
         return genetic_algorithm_unified_original(prices, dates, precalculated_indicators, ga_params, seed_genes)
 
 def genetic_algorithm_unified_original(prices, dates, precalculated_indicators, ga_params, seed_genes=None):
-    """原有的單目標遺傳算法（保持完全兼容）"""
     GENE_LENGTH = len(GENE_MAP)
 
     generations, pop_size, crossover_rate, mutation_rate, elitism_size, tournament_size = \
@@ -1289,7 +1241,6 @@ def genetic_algorithm_unified_original(prices, dates, precalculated_indicators, 
     return best_gene_overall, best_fitness_overall
 
 def nsga2_optimize(prices, dates, precalculated_indicators, ga_params):
-    """NSGA-II 多目標優化主函數 - 完整修復版"""
     if not NSGA2_AVAILABLE:
         print("[GAEngine] ERROR: NSGA-II 不可用，無法執行多目標優化。")
         return None, None
@@ -1344,11 +1295,9 @@ def nsga2_optimize(prices, dates, precalculated_indicators, ga_params):
         traceback.print_exc()
         return None, None
 
-# --- 其餘輔助函數保持不變 ---
 def check_ga_buy_signal_at_latest_point(
     gene, current_price_latest, vix_ma_latest, rsi_latest, bbl_latest, adx_latest,
     ma_short_latest, ma_long_latest, ma_short_prev, ma_long_prev):
-    """在最新數據點檢查買入信號"""
     try:
         regime_choice, normal_strat, risk_off_strat = int(gene[0]), int(gene[1]), int(gene[2])
         vix_threshold, sentiment_threshold = gene[3], gene[4]
@@ -1385,17 +1334,10 @@ def check_ga_buy_signal_at_latest_point(
         return False
 
 def format_ga_gene_parameters_to_text(gene):
-    """
-    
-    將系統A基因參數轉換為詳細、統一且易於理解的中文策略描述。
-    """
     try:
         if not gene or len(gene) != len(GENE_MAP):
             return "基因格式錯誤 (長度不符)"
 
-        # --------------------------------------------------
-        # 1. 解析基因，獲取所有需要的參數
-        # --------------------------------------------------
         config = GA_PARAMS_CONFIG
         
         # 市場狀態判斷
@@ -1421,9 +1363,6 @@ def format_ga_gene_parameters_to_text(gene):
         low_vol_strat_idx = gene[GENE_MAP['normal_strat']]
         high_vol_strat_idx = gene[GENE_MAP['risk_off_strat']]
         
-        # --------------------------------------------------
-        # 2. 為每種策略生成簡潔的描述和參數
-        # --------------------------------------------------
         
         def get_strategy_description(strat_idx):
             """輔助函式：根據策略索引生成描述和所需參數"""
@@ -1613,5 +1552,5 @@ def check_module_integrity():
 if __name__ == "__main__":
     check_module_integrity()
 else:
-    print("[GAEngine] ga_engine.py v2.1 模組已載入完成（修復版）")
-    print("[GAEngine] 修復功能：NSGA-II 基因採樣器 + 交易獎勵機制 + 平均交易報酬率")
+    print("[GAEngine]載入完成")
+    
