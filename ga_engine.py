@@ -1438,9 +1438,7 @@ def format_ga_gene_parameters_to_text(gene):
         low_vol_buy, low_vol_sell, low_vol_params = get_strategy_description(low_vol_strat_idx)
         high_vol_buy, high_vol_sell, high_vol_params = get_strategy_description(high_vol_strat_idx)
 
-        # --------------------------------------------------
-        # 3. 組合最終的描述字串
-        # --------------------------------------------------
+
 
         # 策略標籤
         strategy_styles = {
