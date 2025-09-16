@@ -1,12 +1,3 @@
-# ga_engine_b.py (v2.1 - 系統B多目標優化修復版)
-"""
-AI遺傳演算法引擎 - 系統B (10基因交易策略)
-支援 NSGA-II 多目標優化 + 平均交易報酬率
-===============================================
-版本: v2.1
-基因結構: 10個參數 (RSI策略為主)
-更新: 2025/07/05
-"""
 
 import pandas as pd
 import numpy as np
@@ -29,10 +20,9 @@ try:
     from pymoo.operators.crossover.sbx import SBX
     from pymoo.operators.mutation.pm import PM
     NSGA2_AVAILABLE = True
-    print("[GAEngine_B] ✅ NSGA-II 多目標優化支援已載入")
 except ImportError:
     NSGA2_AVAILABLE = False
-    print("[GAEngine_B] ⚠️  NSGA-II 未安裝，將使用傳統GA (pip install pymoo)")
+ 
 
 # --- 日誌設定 ---
 logger = logging.getLogger("GAEngine_B")
@@ -42,10 +32,6 @@ if not logger.hasHandlers():
     handler.setFormatter(formatter)
     logger.addHandler(handler)
     logger.setLevel(logging.INFO)
-
-# ═══════════════════════════════════════════════════════════════
-# 📊 系統B配置 (10基因策略)
-# ═══════════════════════════════════════════════════════════════
 
 STRATEGY_CONFIG_B = {
     'rsi_period_options': [6, 12, 21],
@@ -86,7 +72,7 @@ GA_PARAMS_CONFIG_B = {
     **STRATEGY_CONFIG_B
 }
 
-# 基因對應表 (10基因系統)
+# 基因對應表 
 GENE_MAP_B = {
     'rsi_buy_entry': 0,      # RSI買入閾值
     'rsi_exit': 1,           # RSI賣出閾值  
@@ -100,12 +86,10 @@ GENE_MAP_B = {
     'high_vol_entry': 9      # 高波動進場策略選擇
 }
 
-# ═══════════════════════════════════════════════════════════════
-# 📈 數據載入函數 
-# ═══════════════════════════════════════════════════════════════
+
 
 def load_stock_data_b(ticker, vix_ticker="^VIX", start_date=None, end_date=None, verbose=False):
-    """系統B專用數據載入函數"""
+
     if verbose: 
         logger.info(f"正在載入 {ticker} 和 {vix_ticker} 的數據 ({start_date} ~ {end_date})")
     
@@ -229,12 +213,7 @@ def load_stock_data_b(ticker, vix_ticker="^VIX", start_date=None, end_date=None,
         logger.error(f"載入 {ticker} 數據時發生錯誤: {type(e).__name__}: {e}", exc_info=True)
         return None, None, None, None
 
-# ═══════════════════════════════════════════════════════════════
-# 📊 技術指標預計算
-# ═══════════════════════════════════════════════════════════════
-
 def precompute_indicators_b(stock_df, vix_series, strategy_config, verbose=False):
-    """系統B專用指標預計算"""
     precalculated = {
         'rsi': {},
         'vix_ma': {},
@@ -337,9 +316,6 @@ def precompute_indicators_b(stock_df, vix_series, strategy_config, verbose=False
             traceback.print_exc()
         return {}, False
 
-# ═══════════════════════════════════════════════════════════════
-# 🔥 Numba加速策略核心 (系統B)
-# ═══════════════════════════════════════════════════════════════
 
 @numba.jit(nopython=True)
 def run_strategy_numba_core_b(
@@ -430,7 +406,7 @@ def run_strategy_numba_core_b(
                 last_valid_portfolio_value = current_portfolio_value
             continue
         
-        # 📈 買入邏輯 (空倉時)
+        # 買入邏輯 (空倉時)
         if position == 0:
             # 判斷市場狀態
             is_high_vol = vix_ma_i >= vix_threshold
@@ -474,7 +450,7 @@ def run_strategy_numba_core_b(
                         buy_signal_rsis[buy_count] = rsi_i
                         buy_count += 1
         
-        # 📉 賣出邏輯 (持倉時)
+        # 賣出邏輯 (持倉時)
         elif position == 1:
             sell_condition = False
             
@@ -517,7 +493,6 @@ def run_strategy_numba_core_b(
                     sell_signal_rsis[sell_count] = rsi_i
                     sell_count += 1
         
-        # 📊 更新投資組合價值
         current_stock_value = stock * current_price if position == 1 else 0.0
         current_portfolio_value = cash + current_stock_value
         
@@ -532,10 +507,6 @@ def run_strategy_numba_core_b(
     return (portfolio_values_arr,
             buy_signal_indices[:buy_count], buy_signal_prices[:buy_count], buy_signal_rsis[:buy_count],
             sell_signal_indices[:sell_count], sell_signal_prices[:sell_count], sell_signal_rsis[:sell_count])
-
-# ═══════════════════════════════════════════════════════════════
-# 🎯 策略包裝函數
-# ═══════════════════════════════════════════════════════════════
 
 def run_strategy_b(rsi_buy_entry_threshold, rsi_exit_threshold, adx_threshold, vix_threshold,
                    low_vol_exit_strategy, high_vol_entry_choice, commission_rate,
@@ -603,12 +574,8 @@ def run_strategy_b(rsi_buy_entry_threshold, rsi_exit_threshold, adx_threshold, v
     
     return portfolio_values_arr.tolist(), buy_signals, sell_signals
 
-# ═══════════════════════════════════════════════════════════════
-# 🧬 有效基因採樣器 (系統B)
-# ═══════════════════════════════════════════════════════════════
 
 class ValidGASampling_B(Sampling):
-    """系統B的有效基因採樣器"""
     
     def __init__(self, ga_params):
         super().__init__()
@@ -692,9 +659,6 @@ class ValidGASampling_B(Sampling):
         print(f"[GAEngine_B] NSGA-II 成功生成 {len(population)} 個有效基因（嘗試 {attempts} 次）")
         return np.array(population, dtype=float)
 
-# ═══════════════════════════════════════════════════════════════
-# 🎯 NSGA-II 多目標優化問題定義 (系統B)
-# ═══════════════════════════════════════════════════════════════
 
 class MultiObjectiveStrategyProblem_B(Problem):
     """系統B多目標策略優化問題"""
@@ -724,12 +688,9 @@ class MultiObjectiveStrategyProblem_B(Problem):
         xl[7] = 0; xu[7] = len(ga_params['bb_std_options']) - 1  # BB標準差
         xl[8] = min_adx; xu[8] = max_adx  # ADX閾值
         xl[9] = 0; xu[9] = 1  # 高波動進場策略
-        
-        # 4個目標 + 1個約束
         super().__init__(n_var=10, n_obj=4, n_constr=1, xl=xl, xu=xu, type_var=int)
     
     def _evaluate(self, X, out, *args, **kwargs):
-        """評估目標函數和約束"""
         objectives = np.zeros((X.shape[0], 4))
         constraints = np.zeros((X.shape[0], 1))
         
@@ -757,7 +718,7 @@ class MultiObjectiveStrategyProblem_B(Problem):
         out["G"] = constraints
     
     def _run_backtest_raw(self, gene):
-        """執行回測"""
+
         # 提取基因參數
         rsi_buy_entry = gene[0]
         rsi_exit = gene[1]
@@ -807,7 +768,7 @@ class MultiObjectiveStrategyProblem_B(Problem):
         final_value = portfolio_values[-1]
         total_return = final_value - 1.0
 
-        # 🔥 加入交易獎勵機制
+
         completed_trades = min(len(buy_signals), len(sell_signals))
         trade_bonus = 1.0
 
@@ -825,7 +786,7 @@ class MultiObjectiveStrategyProblem_B(Problem):
         drawdowns = (running_max - portfolio_arr) / running_max
         max_drawdown = np.max(drawdowns) if len(drawdowns) > 0 else 0
         
-         # === 【新增】從配置中獲取無風險利率並計算夏普比率 ===
+
         risk_free_rate = self.ga_params.get('risk_free_rate', 0.04)
         sharpe_ratio = 0.0
         portfolio_arr_clean = portfolio_arr[np.isfinite(portfolio_arr)]
@@ -836,12 +797,12 @@ class MultiObjectiveStrategyProblem_B(Problem):
                 if np.std(excess_returns) > 0:
                     sharpe_ratio = (np.mean(excess_returns) / np.std(excess_returns)) * np.sqrt(252)
                     
-        # 🔥 修復：計算交易指標 + 勝率
+        # 計算交易指標 + 勝率
         total_profit = 0.0
         total_loss = 0.0
         total_trade_returns = 0.0
         valid_trades = 0
-        winning_trades = 0  # 🌟 新增：獲利交易次數統計
+        winning_trades = 0  # 
 
         for i in range(completed_trades):
             try:
@@ -854,7 +815,7 @@ class MultiObjectiveStrategyProblem_B(Problem):
 
                     if trade_return > 0:
                         total_profit += trade_return
-                        winning_trades += 1  # 🌟 統計獲利交易
+                        winning_trades += 1  # 
                     else:
                         total_loss += abs(trade_return)
 
@@ -866,7 +827,7 @@ class MultiObjectiveStrategyProblem_B(Problem):
         profit_factor = total_profit / total_loss if total_loss > 0 else (total_profit if total_profit > 0 else 1.0)
         average_trade_return = total_trade_returns / valid_trades if valid_trades > 0 else 0.0
         
-        # 🌟 修復：計算勝率
+
         win_rate_pct = (winning_trades / valid_trades) * 100 if valid_trades > 0 else 0.0
 
         return {
@@ -875,17 +836,11 @@ class MultiObjectiveStrategyProblem_B(Problem):
             'profit_factor': max(profit_factor, 0.01),
             'trade_count': completed_trades,
             'average_trade_return': average_trade_return,
-            'win_rate_pct': win_rate_pct,  # 🌟 新增：返回勝率
+            'win_rate_pct': win_rate_pct, 
             'sharpe_ratio': sharpe_ratio
         }
 
-
-# ═══════════════════════════════════════════════════════════════
-# 🚀 統一遺傳算法函數 (系統B)
-# ═══════════════════════════════════════════════════════════════
-
 def genetic_algorithm_unified_b(prices, dates, precalculated_indicators, ga_params):
-    """系統B統一遺傳算法函數"""
     use_nsga2 = ga_params.get('nsga2_enabled', False) and NSGA2_AVAILABLE
     
     if use_nsga2:
@@ -893,7 +848,7 @@ def genetic_algorithm_unified_b(prices, dates, precalculated_indicators, ga_para
         return nsga2_optimize_b(prices, dates, precalculated_indicators, ga_params)
     else:
         print("[GAEngine_B] 使用傳統單目標GA")
-        # 導入並調用原有的遺傳算法函數
+
         from model_train2 import genetic_algorithm_with_elitism
         
         # 準備數據格式
@@ -913,7 +868,6 @@ def genetic_algorithm_unified_b(prices, dates, precalculated_indicators, ga_para
         return result
 
 def nsga2_optimize_b(prices, dates, precalculated_indicators, ga_params):
-    """系統B NSGA-II 多目標優化"""
     if not NSGA2_AVAILABLE:
         print("[GAEngine_B] ERROR: NSGA-II 不可用")
         return None, None
@@ -967,46 +921,40 @@ def nsga2_optimize_b(prices, dates, precalculated_indicators, ga_params):
         return None, None
 
 def select_best_from_pareto_b(pareto_genes, pareto_objectives, prices, dates, precalculated, selection_method, ga_params):
-    """從帕累托前沿選擇最佳策略 (系統B) - (修正版：嚴格遵守交易次數約束)"""
     if not pareto_genes:
         return None, {}
     
     all_metrics = []
     temp_problem = MultiObjectiveStrategyProblem_B(prices, dates, precalculated, ga_params)
     
-    # --- ✨ 修正點 1 START ---
-    # 獲取使用者設定的最小交易次數硬性約束
     min_trades_required = ga_params.get('min_required_trades', 5)
     logger.info(f"[Pareto Select] 將嚴格篩選交易次數 >= {min_trades_required} 的策略。")
     
     valid_genes = []
     valid_metrics = []
     
-    # 步驟 1: 遍歷所有帕累托解，計算指標並進行篩選
+    #  遍歷所有帕累托解，計算指標並進行篩選
     for gene in pareto_genes:
         try:
             portfolio_values, buy_signals, sell_signals = temp_problem._run_backtest_raw(np.array(gene))
             metrics = temp_problem._calculate_metrics(portfolio_values, buy_signals, sell_signals)
-            
-            # 關鍵判斷：只將滿足交易次數約束的策略納入候選清單
+     
             if metrics.get('trade_count', 0) >= min_trades_required:
                 valid_genes.append(gene)
                 valid_metrics.append(metrics)
             else:
-                # 為了偵錯，可以選擇性地印出被捨棄的策略
-                # print(f"[Debug] 捨棄策略 (交易次數 {metrics.get('trade_count', 0)} < {min_trades_required}): {gene}")
+
                 pass
 
         except Exception as e:
             logger.warning(f"[Pareto Select] 計算帕累托解指標時出錯: {e}")
             continue # 出錯的解直接跳過
 
-    # 步驟 2: 判斷是否有任何合格的策略
+
     if not valid_metrics:
         logger.warning(f"[Pareto Select] 警告：在 {len(pareto_genes)} 個帕累托解中，沒有任何一個策略滿足交易次數 >= {min_trades_required} 的條件。")
         logger.warning("[Pareto Select] 將放寬限制，從所有解中選擇最佳者作為備用方案。")
-        # --- Fallback: 如果沒有任何解滿足條件，則退回到原始邏輯 ---
-        # 重新計算所有解的指標（避免重複計算）
+
         all_metrics_fallback = []
         for gene in pareto_genes:
             portfolio_values, buy_signals, sell_signals = temp_problem._run_backtest_raw(np.array(gene))
@@ -1033,7 +981,7 @@ def select_best_from_pareto_b(pareto_genes, pareto_objectives, prices, dates, pr
             min_val, max_val = np.min(arr), np.max(arr)
             return (arr - min_val) / (max_val - min_val) if (max_val - min_val) > 1e-9 else np.full_like(arr, 0.5)
 
-        # --- ✨ 修正點 2: 使用篩選後的 target_metrics_for_scoring 進行計算 ---
+
         all_returns = np.array([m['total_return'] for m in target_metrics_for_scoring])
         all_avg_trade_returns = np.array([m['average_trade_return'] for m in target_metrics_for_scoring])
         all_win_rates = np.array([m.get('win_rate_pct', 0) for m in target_metrics_for_scoring])
@@ -1056,7 +1004,7 @@ def select_best_from_pareto_b(pareto_genes, pareto_objectives, prices, dates, pr
         best_idx = np.argmax(balanced_scores)
         
     else:
-        # 其他選擇方法 (例如: 'return', 'average_trade_return')
+
         if selection_method == 'return':
             best_idx = np.argmax([m['total_return'] for m in target_metrics_for_scoring])
         elif selection_method == 'average_trade_return':
@@ -1064,12 +1012,10 @@ def select_best_from_pareto_b(pareto_genes, pareto_objectives, prices, dates, pr
         else: # 預設 fallback
             best_idx = np.argmax([m['total_return'] for m in target_metrics_for_scoring])
 
-    # --- ✨ 修正點 3: 從篩選後的 target_genes_for_scoring 和 target_metrics_for_scoring 中返回結果 ---
+
     return target_genes_for_scoring[best_idx], target_metrics_for_scoring[best_idx]
 
-# ═══════════════════════════════════════════════════════════════
-# 🎨 策略描述函數 (系統B)
-# ═══════════════════════════════════════════════════════════════
+
 
 def format_gene_parameters_to_text_b(gene):
     """
@@ -1080,9 +1026,6 @@ def format_gene_parameters_to_text_b(gene):
         if not gene or len(gene) != 10:
             return "系統B基因格式錯誤 (長度不符)"
 
-        # --------------------------------------------------
-        # 1. 解析基因，獲取所有需要的參數
-        # --------------------------------------------------
         config = STRATEGY_CONFIG_B
         
         # 市場狀態判斷
@@ -1115,9 +1058,7 @@ def format_gene_parameters_to_text_b(gene):
         bb_length = config['bb_length_options'][bb_length_choice]
         bb_std = config['bb_std_options'][bb_std_choice]
 
-        # --------------------------------------------------
-        # 2. 為高波動和低波動市場生成描述
-        # --------------------------------------------------
+
         
         # --- 高波動市場 ---
         if high_vol_entry_choice == 0: # BB+RSI
@@ -1140,9 +1081,7 @@ def format_gene_parameters_to_text_b(gene):
         low_vol_params = "均線交叉 (5日 vs 10日)"
         low_vol_style = "趨勢追蹤型"
 
-        # --------------------------------------------------
-        # 3. 組合最終的描述字串
-        # --------------------------------------------------
+
 
         # 策略標籤
         style = "混合型"
@@ -1176,11 +1115,6 @@ def format_gene_parameters_to_text_b(gene):
     except Exception as e:
         return f"系統B策略參數解析錯誤：{str(e)}"
 
-
-
-# ═══════════════════════════════════════════════════════════════
-# 🔍 模組完整性檢查
-# ═══════════════════════════════════════════════════════════════
 
 def check_module_integrity_b():
     """檢查系統B模組完整性"""
@@ -1225,11 +1159,7 @@ def check_module_integrity_b():
     except ImportError:
         print("[GAEngine_B] ❌ Numba 未安裝")
         return False
-    
-    print("[GAEngine_B] === 檢查完成 ===")
-    print(f"[GAEngine_B] 基因長度: 10 位 (RSI主導型)")
-    print(f"[GAEngine_B] 策略類型: 波動率切換型多策略")
-    print(f"[GAEngine_B] 模組版本: v2.1 (修復版)")
+
     
     return True
 
@@ -1237,5 +1167,6 @@ def check_module_integrity_b():
 if __name__ == "__main__":
     check_module_integrity_b()
 else:
-    print("[GAEngine_B] 🚀 ga_engine_b.py v2.1 模組已載入完成（修復版）")
-    print("[GAEngine_B] 🎯 系統B功能：10基因RSI策略 + NSGA-II多目標優化 + 平均交易報酬率")
+    print("[GAEngine_B] 載入完成")
+
+
