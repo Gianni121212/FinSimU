@@ -2827,33 +2827,33 @@ if __name__ == '__main__':
         scheduler.add_job(
             func=run_scheduled_backtest,
             trigger='cron',
-            hour=21,
-            minute=35,
+            hour=5,
+            minute=30,
             id='daily_backtest_job',
-            name='每日台灣時間 17:30 執行策略回測',
+            name='每日台灣時間 5:30 執行策略回測',
             replace_existing=True
         )
-        logger.info("✅ 已設定每日策略回測排程 (17:30)。")
+        logger.info("✅ 已設定每日策略回測排程 (5:30)。")
         scheduler.add_job(
             func=run_scheduled_backtest,
             trigger='cron',
             hour=12,
             minute=0,
             id='daily_backtest_job',
-            name='每日台灣時間 09:30 執行策略回測',
+            name='每日台灣時間 12:00 執行策略回測',
             replace_existing=True
         )
-        logger.info("✅ 已設定每日策略回測排程 (17:30)。")
+        logger.info("✅ 已設定每日策略回測排程 (12:00)。")
         scheduler.add_job(
             func=run_scheduled_backtest,
             trigger='cron',
             hour=22,
             minute=30,
             id='daily_backtest_job',
-            name='每日台灣時間 22:00 執行策略回測',
+            name='每日台灣時間 22:30 執行策略回測',
             replace_existing=True
         )
-        logger.info("✅ 已設定每日策略回測排程 (17:30)。")
+        logger.info("✅ 已設定每日策略回測排程 (22:30)。")
     else:
         logger.warning("⚠️ 由於模組導入失敗，每日自動回測功能已停用。")
         
@@ -2895,3 +2895,4 @@ if __name__ == '__main__':
     
 
     app.run(debug=False, host='0.0.0.0', port=5001)
+
